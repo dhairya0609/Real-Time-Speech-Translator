@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { MicrophoneIcon, StopIcon, GlobeAltIcon, BoltIcon } from "@heroicons/react/24/solid";
+import { MicrophoneIcon, StopIcon, GlobeAltIcon, BoltIcon, SunIcon, MoonIcon } from "@heroicons/react/24/solid";
 import LanguageSelector from "./LanguageSelector";
 import TranscriptDisplay from "./TranscriptDisplay";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -8,9 +8,9 @@ import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import languageList from "../utils/languageList";
 
 const statusIcons = {
-  listening: <MicrophoneIcon className="w-5 h-5 text-blue-500 inline" />,
-  translating: <GlobeAltIcon className="w-5 h-5 text-green-500 inline" />,
-  connected: <BoltIcon className="w-5 h-5 text-teal-500 inline" />,
+  listening: <MicrophoneIcon className="w-4 h-4 text-violet-500 inline" />,
+  translating: <GlobeAltIcon className="w-4 h-4 text-emerald-500 inline" />,
+  connected: <BoltIcon className="w-4 h-4 text-cyan-500 inline" />,
 };
 
 const MainUI: React.FC = () => {
@@ -105,90 +105,120 @@ const MainUI: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors font-sans">
-        {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 shadow-sm bg-white dark:bg-gray-900">
-          <div className="flex items-center gap-4">
-            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-teal-400 bg-clip-text text-transparent">
-              Live Speech Translator
-            </span>
-            <span className="ml-2 px-2 py-1 rounded bg-blue-100 text-blue-700 text-xs font-semibold dark:bg-blue-900 dark:text-blue-200">
+      <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#f5f7fa] via-white to-blue-50 dark:from-[#0f0f11] dark:via-gray-900 dark:to-gray-800 transition-all duration-500 font-sans">
+        {/* Header with glassmorphism */}
+        <header className="flex items-center justify-between px-6 py-4 card-glass mx-4 mt-4 mb-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-violet-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
+                <GlobeAltIcon className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-violet-600 via-indigo-600 to-cyan-500 bg-clip-text text-transparent gradient-shift">
+                  Live Speech Translator
+                </h1>
+                <p className="text-xs text-gray-700 dark:text-gray-300 font-medium">Real-time Speech translation</p>
+              </div>
+            </div>
+            {/*             <span className="px-2 py-1 rounded-full bg-gradient-to-r from-violet-500/20 to-indigo-500/20 text-violet-800 dark:text-violet-200 text-xs font-semibold border border-violet-200 dark:border-violet-800">
               BETA
-            </span>
+            </span> */}
           </div>
-          <div className="flex items-center gap-4">
+          
+          {/* Theme toggle with glassmorphism */}
+          <div className="flex items-center gap-2 card-glass px-3 py-1">
+            <SunIcon className="w-4 h-4 text-amber-500" />
             <Switch
               checked={isDark}
               onChange={setIsDark}
               className={`${
-                isDark ? "bg-blue-600" : "bg-gray-300"
-              } relative inline-flex h-6 w-11 items-center rounded-full transition-colors`}
+                isDark ? "bg-gradient-to-r from-violet-500 to-indigo-600" : "bg-gradient-to-r from-gray-200 to-gray-300"
+              } relative inline-flex h-6 w-12 items-center rounded-full transition-all duration-300 shadow-lg`}
               aria-label="Toggle dark mode"
             >
               <span
                 className={`${
                   isDark ? "translate-x-6" : "translate-x-1"
-                } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                } inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-md`}
               />
             </Switch>
-            <span className="text-sm text-gray-600 dark:text-gray-300">Dark Mode</span>
+            <MoonIcon className="w-4 h-4 text-indigo-500" />
           </div>
         </header>
 
-        {/* Language selectors and settings */}
-        <div className="flex flex-wrap items-center justify-between px-6 py-4 gap-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        {/* Language selectors with glassmorphism */}
+        <div className="flex flex-wrap items-center justify-between px-6 py-4 card-glass mx-4 mb-3">
           <div className="flex gap-6 flex-wrap">
-            <LanguageSelector value={sourceLang} onChange={setSourceLang} label="Source" />
-            <LanguageSelector value={targetLang} onChange={setTargetLang} label="Target" />
+            <LanguageSelector value={sourceLang} onChange={setSourceLang} label="Source Language" />
+            <LanguageSelector value={targetLang} onChange={setTargetLang} label="Target Language" />
           </div>
         </div>
 
-        {/* Status indicators */}
-        <div className="flex items-center justify-center gap-8 py-3 bg-gray-100 dark:bg-gray-800">
+        {/* Status indicators with glassmorphism */}
+        <div className="flex items-center justify-center gap-6 py-3 card-glass mx-4 mb-4">
           <Status label="Listening" active={listening} icon={statusIcons.listening} />
           <Status label="Processing" active={isProcessing} icon={statusIcons.translating} />
           <Status label="Connected" active={true} icon={statusIcons.connected} />
         </div>
 
-        {/* Main split-screen */}
-        <main className="flex-1 flex flex-col md:flex-row overflow-hidden gap-8 px-8 py-8">
+        {/* Main split-screen with glassmorphism */}
+        <main className="flex-1 flex flex-col md:flex-row overflow-hidden gap-4 px-6 pb-20">
           {/* Original text */}
           <section className="w-full md:w-1/2 flex flex-col">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 flex flex-col h-full">
-              <h2 className="text-xl font-bold text-blue-700 dark:text-blue-300 mb-4">Original ({getLanguageName(sourceLang)})</h2>
-              <div className="flex-1 min-h-[200px]">
+            <div className="card-glass p-4 flex flex-col h-full">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 bg-gradient-to-r from-violet-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                  <GlobeAltIcon className="w-3 h-3 text-white" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">
+                  Original ({getLanguageName(sourceLang)})
+                </h2>
+              </div>
+              <div className="flex-1 min-h-[150px]">
                 <TranscriptDisplay
                   text={recognized}
                   language={sourceLang}
                   isStreaming={listening}
                   className="h-full"
+                  isTranslation={false}
                 />
               </div>
             </div>
           </section>
+          
           {/* Translated text */}
           <section className="w-full md:w-1/2 flex flex-col">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 flex flex-col h-full">
-              <h2 className="text-xl font-bold text-teal-700 dark:text-teal-300 mb-4">Translated ({getLanguageName(targetLang)})</h2>
-              <div className="flex-1 min-h-[200px]">
+            <div className="card-glass p-4 flex flex-col h-full">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 bg-gradient-to-r from-emerald-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                  <BoltIcon className="w-3 h-3 text-white" />
+                </div>
+                <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">
+                  Translated ({getLanguageName(targetLang)})
+                </h2>
+              </div>
+              <div className="flex-1 min-h-[150px]">
                 <TranscriptDisplay
                   text={translated}
                   language={targetLang}
                   isStreaming={isProcessing}
                   className="h-full"
+                  isTranslation={true}
                 />
               </div>
             </div>
           </section>
         </main>
 
-        {/* Central controls */}
-        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center">
+        {/* Central controls with stunning mic button */}
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center">
           <button
             ref={startStopBtnRef}
-            className={`rounded-full px-12 py-5 text-2xl font-bold shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all
-              ${listening ? "bg-red-600 text-white" : "bg-gradient-to-r from-blue-600 to-purple-600 text-white"}
-              hover:scale-105`}
+            className={`relative rounded-full p-4 text-lg font-bold shadow-xl focus:outline-none focus:ring-4 focus:ring-violet-300/50 transition-all duration-300 transform hover:scale-110 ${
+              listening 
+                ? "bg-gradient-to-r from-red-500 to-pink-600 text-white pulse-glow" 
+                : "bg-gradient-to-r from-violet-500 to-indigo-600 text-white hover:from-violet-600 hover:to-indigo-700"
+            }`}
             onClick={() => listening ? handleStop() : handleStart()}
             aria-pressed={listening}
             aria-label={listening ? "Stop recording" : "Start recording"}
@@ -196,25 +226,27 @@ const MainUI: React.FC = () => {
           >
             {listening ? (
               <>
-                <StopIcon className="w-7 h-7 inline mr-2" />
+                <StopIcon className="w-6 h-6 inline mr-2" />
                 Stop
               </>
             ) : (
               <>
-                <MicrophoneIcon className="w-7 h-7 inline mr-2" />
+                <MicrophoneIcon className="w-6 h-6 inline mr-2" />
                 Start
               </>
             )}
           </button>
-          {/* Audio level bar */}
-          <div className="mt-4 w-64 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          
+          {/* Audio level bar with gradient */}
+          <div className="mt-4 w-64 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden card-glass">
             <div
-              className="h-3 bg-gradient-to-r from-green-400 to-blue-500 transition-all"
+              className="h-3 bg-gradient-to-r from-emerald-400 via-cyan-500 to-violet-500 transition-all duration-300 rounded-full"
               style={{ width: `${Math.min(100, audioLevel * 100)}%` }}
             />
           </div>
+          
           {error && (
-            <div className="mt-2 text-red-600 font-semibold text-center max-w-xs">
+            <div className="mt-3 card-glass px-4 py-2 text-red-600 dark:text-red-400 font-semibold text-center max-w-xs text-sm">
               {error}
             </div>
           )}
@@ -229,15 +261,17 @@ const Status: React.FC<{ label: string; active: boolean; icon: React.ReactNode }
   active,
   icon,
 }) => (
-  <div className="flex items-center gap-1">
+  <div className="flex items-center gap-2 card-glass px-3 py-1">
     <span
-      className={`inline-block w-3 h-3 rounded-full ${
-        active ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"
+      className={`inline-block w-2 h-2 rounded-full transition-all duration-300 ${
+        active 
+          ? "bg-gradient-to-r from-violet-500 to-indigo-600 shadow-lg" 
+          : "bg-gray-300 dark:bg-gray-600"
       }`}
       aria-label={label}
     />
-    {icon}
-    <span className="text-sm text-gray-700 dark:text-gray-200">{label}</span>
+    <span className="text-violet-500">{icon}</span>
+    <span className="text-xs font-medium text-gray-800 dark:text-gray-200">{label}</span>
   </div>
 );
 
