@@ -103,10 +103,10 @@ const LanguageSelector: React.FC<Props> = ({ value, onChange, label }) => {
   };
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col w-full sm:w-auto">
       {label && (
-        <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-          <GlobeAltIcon className="w-4 h-4 text-violet-500" />
+        <label className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2">
+          <GlobeAltIcon className="w-3 h-3 sm:w-4 sm:h-4 text-violet-500" />
           {label}
         </label>
       )}
@@ -118,7 +118,7 @@ const LanguageSelector: React.FC<Props> = ({ value, onChange, label }) => {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         onKeyPress={handleKeyPress}
-        className="w-64 px-3 py-2 input-glass text-sm focus:ring-2 focus:ring-violet-500/50 mb-2"
+        className="w-full sm:w-64 px-2 sm:px-3 py-1.5 sm:py-2 input-glass text-xs sm:text-sm focus:ring-2 focus:ring-violet-500/50 mb-1 sm:mb-2"
       />
       
       {/* Modern Pill-style Language Selector */}
@@ -127,12 +127,12 @@ const LanguageSelector: React.FC<Props> = ({ value, onChange, label }) => {
         <button
           ref={buttonRef}
           onClick={() => setIsOpen(!isOpen)}
-          className="w-64 px-3 py-2 input-glass flex items-center justify-between text-left transition-all duration-300 hover:shadow-lg focus:ring-2 focus:ring-violet-500/50"
+          className="w-full sm:w-64 px-2 sm:px-3 py-1.5 sm:py-2 input-glass flex items-center justify-between text-left transition-all duration-300 hover:shadow-lg focus:ring-2 focus:ring-violet-500/50"
         >
-          <div className="flex items-center gap-2">
-            <span className="text-lg">{currentLang?.flag || "🌐"}</span>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="text-base sm:text-lg">{currentLang?.flag || "🌐"}</span>
             <div>
-              <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+              <div className="font-semibold text-gray-900 dark:text-gray-100 text-xs sm:text-sm">
                 {currentLang?.name || "Select Language"}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -141,7 +141,7 @@ const LanguageSelector: React.FC<Props> = ({ value, onChange, label }) => {
             </div>
           </div>
           <ChevronDownIcon 
-            className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${
+            className={`w-3 h-3 sm:w-4 sm:h-4 text-gray-400 transition-transform duration-300 ${
               isOpen ? "rotate-180" : ""
             }`} 
           />
@@ -169,15 +169,15 @@ const LanguageSelector: React.FC<Props> = ({ value, onChange, label }) => {
                     e.stopPropagation();
                     handleLanguageSelect(lang.code);
                   }}
-                  className={`w-full px-3 py-2 flex items-center gap-2 text-left transition-all duration-200 hover:bg-violet-500/10 ${
+                  className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2 text-left transition-all duration-200 hover:bg-violet-500/10 ${
                     lang.code === value 
                       ? "bg-violet-500/20 text-violet-700 dark:text-violet-300" 
                       : "text-gray-700 dark:text-gray-300"
                   }`}
                 >
-                  <span className="text-lg">{lang.flag}</span>
+                  <span className="text-base sm:text-lg">{lang.flag}</span>
                   <div>
-                    <div className="font-medium text-sm">{lang.name}</div>
+                    <div className="font-medium text-xs sm:text-sm">{lang.name}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       {lang.code.toUpperCase()}
                     </div>

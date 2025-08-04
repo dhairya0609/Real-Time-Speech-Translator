@@ -8,6 +8,13 @@ html {
   font-size: 15px; /* Slightly larger base font size, adjust if needed */
 }
 
+/* Mobile-first responsive adjustments */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px; /* Slightly smaller for mobile */
+  }
+}
+
 /* Adjust container scaling */
 .min-h-screen {
   min-height: 100vh;
@@ -123,12 +130,83 @@ html {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Responsive touch targets for mobile */
+@media (max-width: 640px) {
+  .btn-primary,
+  .btn-secondary {
+    @apply py-3 px-4; /* Larger touch targets on mobile */
+  }
+  
+  /* Ensure minimum touch target size */
+  button, 
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Improve text readability on small screens */
+  .text-xs {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+  
+  /* Optimize spacing for mobile */
+  .space-y-2 > * + * {
+    margin-top: 0.5rem;
+  }
+  
+  .space-y-3 > * + * {
+    margin-top: 0.75rem;
+  }
+}
+
+/* Prevent zoom on input focus for iOS */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  input[type="text"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Smooth scrolling for better mobile experience */
+html {
+  scroll-behavior: smooth;
+}
+
 /* Base styles */
 body {
   font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Dark mode overrides */
 .dark {
   color-scheme: dark;
+}
+
+/* Responsive container utilities */
+.container-responsive {
+  @apply w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 640px) {
+  /* Reduce backdrop blur on mobile for better performance */
+  .card-glass,
+  .input-glass {
+    backdrop-filter: blur(10px);
+  }
+  
+  /* Optimize animations for mobile */
+  .pulse-glow {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+  
+  /* Ensure proper viewport handling */
+  .min-h-screen {
+    min-height: 100dvh; /* Use dynamic viewport height on mobile */
+  }
 }
