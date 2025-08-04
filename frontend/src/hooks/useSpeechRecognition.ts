@@ -78,7 +78,7 @@ export function useSpeechRecognition({
       const stream = await startAudioCapture();
 
       // Create WebSocket connection to backend
-      const ws = new WebSocket("ws://localhost:5000");
+      const ws = new WebSocket("wss://trilogy-r2.onrender.com");
       wsRef.current = ws;
 
       let deepgramReady = false;
