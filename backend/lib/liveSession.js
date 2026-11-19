@@ -2,12 +2,18 @@ import { WebSocket } from "ws";
 import config from "./config.js";
 import log from "./log.js";
 import { translate } from "./translator.js";
-import { AUTO, isLanguageCode, resolveSttLanguage } from "./languages.js";
+import { AUTO, isLanguageCode, languageName, resolveSttLanguage, standardSttLanguage } from "./languages.js";
 
 const TONES = new Set(["casual", "formal"]);
 const HISTORY = 6;
 
-function deepgramUrl({ model, language }) {
+// The request the original server made; kept as the default because it is the
+// only one verified against the live Deepgram account.
+function standardUrl(language) {
+  return `${config.deepgramUrl}?punctuate=true&language=${encodeURIComponent(language)}&utterances=true&sample_rate=48000&channels=1`;
+}
+
+function enhancedUrl({ model, language }) {
   const params = new URLSearchParams({
     model,
     language,
@@ -102,23 +108,45 @@ export class LiveSession {
     if (!config.deepgramKey) {
       return this.fail("stt_unconfigured", "Live speech isn't set up on this server yet.");
     }
-    const stt = resolveSttLanguage(this.sourceLang);
-    if (!stt) {
-      return this.fail("stt_language", "Live speech isn't available for this language yet. Type instead, or pick another language.");
+    let url;
+    let sttLabel;
+    this.enhanced = config.deepgramMode === "enhanced";
+    if (this.enhanced) {
+      const stt = resolveSttLanguage(this.sourceLang);
+      if (!stt) {
+        return this.fail("stt_language", "Live speech isn't available for this language yet. Type instead, or pick another language.");
+      }
+      url = enhancedUrl(stt);
+      sttLabel = stt;
+    } else {
+      const language = standardSttLanguage(this.sourceLang);
+      if (language !== this.sourceLang) {
+        this.send({
+          type: "notice",
+          code: "stt_language_fallback",
+          message:
+            this.sourceLang === AUTO
+              ? "Voice auto-detect is off on this server, so it's listening for English. Typed text is still auto-detected."
+              : `Live speech doesn't support ${languageName(this.sourceLang)} yet, so it's listening for English.`,
+        });
+      }
+      this.sttLang = language;
+      url = standardUrl(language);
+      sttLabel = { model: "default", language };
     }
 
     this.stopping = false;
     this.segments = [];
     this.wordLangs = new Map();
-    const dg = new WebSocket(deepgramUrl(stt), { headers: { Authorization: `Token ${config.deepgramKey}` } });
+    const dg = new WebSocket(url, { headers: { Authorization: `Token ${config.deepgramKey}` } });
     this.dg = dg;
     const started = Date.now();
 
     dg.on("open", () => {
       if (this.dg !== dg) return;
       this.ready = true;
-      log.info("stt_open", { model: stt.model, language: stt.language, ms: Date.now() - started });
-      this.send({ type: "ready", model: stt.model, autoDetect: stt.language === "multi" });
+      log.info("stt_open", { mode: config.deepgramMode, model: sttLabel.model, language: sttLabel.language, ms: Date.now() - started });
+      this.send({ type: "ready", mode: config.deepgramMode, autoDetect: sttLabel.language === "multi" });
       this.keepAlive = setInterval(() => {
         if (dg.readyState === WebSocket.OPEN) dg.send(JSON.stringify({ type: "KeepAlive" }));
       }, 8000);
@@ -159,10 +187,18 @@ export class LiveSession {
 
   onDeepgram(msg) {
     if (msg.type === "UtteranceEnd") return this.flushUtterance();
-    if (msg.type !== "Results") return undefined;
+    if (msg.type && msg.type !== "Results") return undefined;
 
     const alt = msg.channel?.alternatives?.[0];
     const text = (alt?.transcript || "").trim();
+
+    if (!this.enhanced) {
+      // Original behaviour: every final result is its own utterance.
+      if (!text) return undefined;
+      if (!msg.is_final) return this.send({ type: "transcript", text, isFinal: false });
+      this.segments.push(text);
+      return this.flushUtterance();
+    }
 
     if (msg.is_final) {
       if (text) {
@@ -179,9 +215,7 @@ export class LiveSession {
       return undefined;
     }
 
-    if (text) {
-      this.send({ type: "transcript", text: [...this.segments, text].join(" "), isFinal: false });
-    }
+    if (text) this.send({ type: "transcript", text: [...this.segments, text].join(" "), isFinal: false });
     return undefined;
   }
 
@@ -199,7 +233,11 @@ export class LiveSession {
   }
 
   async translateUtterance(id, text, detectedLang) {
-    const sourceLang = this.sourceLang === AUTO && detectedLang ? detectedLang : this.sourceLang;
+    const sourceLang = this.enhanced
+      ? this.sourceLang === AUTO && detectedLang
+        ? detectedLang
+        : this.sourceLang
+      : this.sttLang;
     try {
       const r = await translate({
         text,

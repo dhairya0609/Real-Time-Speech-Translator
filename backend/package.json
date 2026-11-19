@@ -8,7 +8,8 @@
     },
     "scripts": {
         "start": "node server.js",
-        "smoke:ai": "node scripts/ai-smoke.js"
+        "smoke:ai": "node scripts/ai-smoke.js",
+        "test:fallback": "node scripts/fallback-test.js && node scripts/fallback-test.js enhanced"
     },
     "dependencies": {
         "@google/genai": "^3.6.1",

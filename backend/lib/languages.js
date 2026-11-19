@@ -50,3 +50,16 @@ export function resolveSttLanguage(code) {
   if (NOVA2.has(base)) return { model: "nova-2", language: base };
   return null;
 }
+
+// The language codes the original server passed straight to Deepgram
+// (standard mode). Anything else falls back to English, as before.
+const STANDARD_STT = new Set(
+  (
+    "en es fr de it pt ru zh ja ko ar hi bn ur th tr vi nl pl sv da no fi cs hu ro bg hr sk sl et lv lt el mt ga cy is mk sq be uk sr bs ca gl eu af hy ka az kk uz tg mn my km lo id ms tl jw ne si ta te kn ml " +
+    "en-US en-GB en-AU en-NZ en-IN es-ES es-MX pt-BR pt-PT fr-FR fr-CA de-DE de-AT it-IT ru-RU zh-CN zh-TW ja-JP ko-KR ar-SA hi-IN bn-IN ur-PK th-TH tr-TR vi-VN nl-NL pl-PL sv-SE da-DK no-NO fi-FI cs-CZ hu-HU ro-RO bg-BG hr-HR sk-SK sl-SI et-EE lv-LV lt-LT el-GR mt-MT ga-IE cy-GB is-IS mk-MK sq-AL be-BY uk-UA sr-RS bs-BA ca-ES gl-ES eu-ES af-ZA hy-AM ka-GE az-AZ kk-KZ uz-UZ tg-TJ mn-MN my-MM km-KH lo-LA id-ID ms-MY tl-PH jw-ID ne-NP si-LK ta-IN te-IN kn-IN ml-IN"
+  ).split(" ")
+);
+
+export function standardSttLanguage(code) {
+  return STANDARD_STT.has(code) ? code : "en";
+}

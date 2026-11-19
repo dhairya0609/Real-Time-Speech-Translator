@@ -4,45 +4,78 @@ import log, { redact } from "./log.js";
 import { AUTO, languageName } from "./languages.js";
 
 let client = null;
+let stubClient = null;
 function ai() {
+  if (stubClient) return stubClient;
   if (!config.geminiKey) return null;
   if (!client) client = new GoogleGenAI({ apiKey: config.geminiKey });
   return client;
 }
 
 export function geminiConfigured() {
-  return Boolean(config.geminiKey);
+  return Boolean(stubClient || config.geminiKey);
 }
 
 export class GeminiError extends Error {
-  constructor(kind, message, retryAfterMs = 0) {
+  constructor(kind, message, { status, retryAfterMs = 0 } = {}) {
     super(message);
     this.kind = kind;
+    this.status = status;
     this.retryAfterMs = retryAfterMs;
   }
 }
 
-// After a 429 or an auth failure, skip Gemini for a while instead of paying
-// its latency on every utterance just to fall back again.
+// After a 429, an auth failure or a missing model, skip Gemini for a while
+// instead of paying its latency on every utterance just to fall back again.
 let coolUntil = 0;
 let coolReason = null;
+// Set after a 400 on the full request: retry without schema/thinking config.
+let minimalConfig = false;
+const health = { lastOkAt: null, lastError: null };
+
 export function geminiCoolingDown() {
   return Date.now() < coolUntil ? coolReason : null;
 }
 
-function classify(err, timedOut) {
-  if (timedOut || err?.name === "AbortError") return new GeminiError("timeout", "Gemini timed out");
-  const status = err?.status;
+export function geminiHealth() {
+  return {
+    configured: geminiConfigured(),
+    model: config.geminiModel,
+    coolingDown: geminiCoolingDown(),
+    minimalConfig,
+    lastOkAt: health.lastOkAt,
+    lastError: health.lastError,
+  };
+}
+
+export function setGeminiClientForTests(fake) {
+  stubClient = fake;
+  coolUntil = 0;
+  coolReason = null;
+  minimalConfig = false;
+  health.lastOkAt = null;
+  health.lastError = null;
+}
+
+const COOLDOWN = { auth: 10 * 60_000, model: 10 * 60_000 };
+
+function classify(err) {
+  if (err instanceof GeminiError) return err;
+  if (err?.name === "AbortError") return new GeminiError("timeout", "Gemini timed out");
+  const status = Number(err?.status) || undefined;
   const message = redact(err?.message || "Gemini request failed").slice(0, 300);
   if (status === 429) {
     const m = /retry in ([\d.]+)s/i.exec(message);
-    const retryAfterMs = m ? Math.ceil(Number(m[1]) * 1000) : 30_000;
-    return new GeminiError("rate_limited", message, retryAfterMs);
+    return new GeminiError("rate_limited", message, { status, retryAfterMs: m ? Math.ceil(Number(m[1]) * 1000) : 30_000 });
   }
   if (status === 401 || status === 403 || /API_KEY_INVALID|API key not valid/i.test(message)) {
-    return new GeminiError("auth", "Gemini rejected the API key", 10 * 60_000);
+    return new GeminiError("auth", "Gemini rejected the API key", { status, retryAfterMs: COOLDOWN.auth });
   }
-  return new GeminiError("error", message);
+  if (status === 404) {
+    return new GeminiError("model", `Model ${config.geminiModel} was not found`, { status, retryAfterMs: COOLDOWN.model });
+  }
+  if (status === 400) return new GeminiError("invalid_request", message, { status });
+  return new GeminiError("error", message, { status });
 }
 
 function thinkingConfig() {
@@ -51,49 +84,86 @@ function thinkingConfig() {
   return { thinkingLevel: level };
 }
 
+function parseJsonLoose(text) {
+  const raw = String(text ?? "").trim();
+  if (!raw) throw new GeminiError("bad_output", "Gemini returned no text");
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  try {
+    const value = JSON.parse(start >= 0 && end > start ? raw.slice(start, end + 1) : raw);
+    if (!value || typeof value !== "object") throw new Error("not an object");
+    return value;
+  } catch {
+    throw new GeminiError("bad_output", "Gemini returned non-JSON output");
+  }
+}
+
+async function callOnce(c, { system, prompt, schema }, minimal, deadline) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw new GeminiError("timeout", "Gemini timed out");
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new GeminiError("timeout", "Gemini timed out"));
+    }, remaining);
+  });
+  const base = { abortSignal: controller.signal, httpOptions: { timeout: remaining } };
+  const request = c.models.generateContent({
+    model: config.geminiModel,
+    contents: prompt,
+    config: minimal
+      ? { ...base, systemInstruction: `${system} Reply with only a JSON object shaped like this JSON Schema: ${JSON.stringify(schema)}` }
+      : {
+          ...base,
+          systemInstruction: system,
+          responseMimeType: "application/json",
+          responseJsonSchema: schema,
+          thinkingConfig: thinkingConfig(),
+        },
+  });
+  try {
+    const response = await Promise.race([request, timeout]);
+    return response?.text;
+  } finally {
+    clearTimeout(timer);
+    request.catch(() => undefined);
+  }
+}
+
 async function generateJson({ system, prompt, schema, timeoutMs, kind }) {
   const c = ai();
   if (!c) throw new GeminiError("unconfigured", "GEMINI_API_KEY is not set");
-  if (geminiCoolingDown()) throw new GeminiError("cooling_down", "Gemini is cooling down", coolUntil - Date.now());
+  if (geminiCoolingDown()) throw new GeminiError("cooling_down", "Gemini is cooling down");
 
-  const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
   const started = Date.now();
-
+  const deadline = started + timeoutMs;
+  const req = { system, prompt, schema };
   try {
-    const response = await c.models.generateContent({
-      model: config.geminiModel,
-      contents: prompt,
-      config: {
-        systemInstruction: system,
-        responseMimeType: "application/json",
-        responseJsonSchema: schema,
-        thinkingConfig: thinkingConfig(),
-        abortSignal: controller.signal,
-        httpOptions: { timeout: timeoutMs },
-      },
-    });
-    const text = response.text ?? "";
-    log.info("gemini_ok", { kind, model: config.geminiModel, ms: Date.now() - started });
+    let text;
     try {
-      return JSON.parse(text);
-    } catch {
-      throw new GeminiError("bad_output", "Gemini returned non-JSON output");
+      text = await callOnce(c, req, minimalConfig, deadline);
+    } catch (err) {
+      const e = classify(err);
+      if (e.kind !== "invalid_request" || minimalConfig) throw e;
+      minimalConfig = true;
+      log.warn("gemini_minimal_config", { model: config.geminiModel, error: e.message });
+      text = await callOnce(c, req, true, deadline);
     }
+    const value = parseJsonLoose(text);
+    health.lastOkAt = new Date().toISOString();
+    log.info("gemini_ok", { kind, model: config.geminiModel, ms: Date.now() - started, minimal: minimalConfig });
+    return value;
   } catch (err) {
-    const e = err instanceof GeminiError ? err : classify(err, timedOut);
-    if (e.kind === "rate_limited" || e.kind === "auth") {
+    const e = classify(err);
+    if (e.retryAfterMs) {
       coolUntil = Date.now() + e.retryAfterMs;
       coolReason = e.kind;
     }
-    log.warn("gemini_failed", { kind, model: config.geminiModel, ms: Date.now() - started, reason: e.kind, error: e.message });
+    health.lastError = { kind: e.kind, status: e.status, at: new Date().toISOString() };
+    log.warn("gemini_failed", { kind, model: config.geminiModel, ms: Date.now() - started, reason: e.kind, status: e.status, error: e.message });
     throw e;
-  } finally {
-    clearTimeout(timer);
   }
 }
 

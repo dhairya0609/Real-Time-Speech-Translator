@@ -26,13 +26,16 @@ const config = {
 
   deepgramKey: str("DEEPGRAM_API_KEY"),
   deepgramUrl: str("DEEPGRAM_WS_URL", "wss://api.deepgram.com/v1/listen"),
+  // "standard" keeps the original Deepgram request; "enhanced" opts into
+  // nova-3/nova-2, interim results, sentence grouping and language=multi.
+  deepgramMode: str("DEEPGRAM_MODE", "standard") === "enhanced" ? "enhanced" : "standard",
   maxSessionMinutes: int("MAX_SESSION_MINUTES", 10),
   maxSocketsPerIp: int("MAX_SOCKETS_PER_IP", 3),
 
   geminiKey: str("GEMINI_API_KEY"),
   geminiModel: str("GEMINI_MODEL", "gemini-3.8-flash"),
   geminiThinkingLevel: str("GEMINI_THINKING_LEVEL", "LOW").toUpperCase(),
-  translateTimeoutMs: int("GEMINI_TIMEOUT_MS", 6000),
+  translateTimeoutMs: int("GEMINI_TIMEOUT_MS", 5000),
   summaryTimeoutMs: int("GEMINI_SUMMARY_TIMEOUT_MS", 20000),
   contextTurns: int("TRANSLATION_CONTEXT_TURNS", 3),
 

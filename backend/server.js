@@ -6,7 +6,7 @@ import config from "./lib/config.js";
 import log from "./lib/log.js";
 import { LiveSession } from "./lib/liveSession.js";
 import { translate } from "./lib/translator.js";
-import { geminiConfigured, geminiCoolingDown, geminiSummarize } from "./lib/gemini.js";
+import { geminiConfigured, geminiCoolingDown, geminiHealth, geminiSummarize } from "./lib/gemini.js";
 import { clientIp, limiters, reserveAiCall } from "./lib/rateLimit.js";
 import { AUTO, isLanguageCode } from "./lib/languages.js";
 
@@ -44,11 +44,22 @@ function validLanguages(sourceLang, targetLang) {
   return isLanguageCode(sourceLang) && isLanguageCode(targetLang) && targetLang !== AUTO;
 }
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+// Config check for deploys: reports what is configured and the last observed
+// Gemini outcome, without calling Gemini or Deepgram and without key material.
+app.get("/health", (_req, res) => {
+  res.json({
+    ok: true,
+    uptimeSec: Math.round(process.uptime()),
+    gemini: geminiHealth(),
+    deepgram: { configured: Boolean(config.deepgramKey), mode: config.deepgramMode },
+  });
+});
 
 app.get("/api/status", (_req, res) => {
   res.json({
     stt: Boolean(config.deepgramKey),
+    sttMode: config.deepgramMode,
+    autoDetect: config.deepgramMode === "enhanced",
     ai: geminiConfigured(),
     aiAvailable: geminiConfigured() && !geminiCoolingDown() && limiters.globalDay.check().ok,
     model: geminiConfigured() ? config.geminiModel : null,
@@ -163,7 +174,13 @@ wss.on("connection", (ws, req) => {
 wss.on("error", (err) => log.error("wss_error", { error: err.message }));
 
 server.listen(config.port, () => {
-  log.info("listening", { port: config.port, stt: Boolean(config.deepgramKey), ai: geminiConfigured(), model: config.geminiModel });
+  log.info("listening", {
+    port: config.port,
+    stt: Boolean(config.deepgramKey),
+    sttMode: config.deepgramMode,
+    ai: geminiConfigured(),
+    model: config.geminiModel,
+  });
 });
 
 process.on("unhandledRejection", (reason) => log.error("unhandled_rejection", { error: String(reason?.message || reason) }));

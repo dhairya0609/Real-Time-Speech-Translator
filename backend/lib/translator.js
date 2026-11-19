@@ -10,6 +10,8 @@ const FALLBACK_NOTICE = {
   auth: "ai_error",
   timeout: "ai_timeout",
   bad_output: "ai_error",
+  model: "ai_error",
+  invalid_request: "ai_error",
   error: "ai_error",
 };
 
@@ -27,7 +29,7 @@ export async function translate({ text, sourceLang, targetLang, tone, context, i
   if (!geminiConfigured()) {
     notice = FALLBACK_NOTICE.unconfigured;
   } else if (geminiCoolingDown()) {
-    notice = FALLBACK_NOTICE[geminiCoolingDown()];
+    notice = FALLBACK_NOTICE[geminiCoolingDown()] || "ai_error";
   } else {
     const slot = reserveAiCall("translate", ip);
     if (!slot.ok) {
