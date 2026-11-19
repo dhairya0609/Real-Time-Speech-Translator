@@ -18,6 +18,7 @@ Object.assign(process.env, {
   DEEPGRAM_MODE: mode,
   GEMINI_MODEL: "primary-model",
   GEMINI_FALLBACK_MODELS: "fallback-model",
+  GEMINI_RETRY_PAUSE_MS: "50",
   GEMINI_TIMEOUT_MS: "800",
   GEMINI_SUMMARY_TIMEOUT_MS: "1000",
   AI_TRANSLATE_PER_MIN: "1000",
@@ -71,6 +72,9 @@ function stub(behaviour) {
             return { text: good };
           case "503":
             throw err(503, "The model is overloaded. Please try again later.");
+          case "503-twice":
+            if (calls.length <= 2) throw err(503, "This model is currently experiencing high demand.");
+            return { text: good };
           case "hang-primary":
             if (req.model === "primary-model") return new Promise(() => {});
             return { text: good };
@@ -124,6 +128,7 @@ for (const [behaviour, expectGemini] of [
   ["400-then-minimal", true],
   ["503-primary", true],
   ["hang-primary", true],
+  ["503-twice", true],
   ["503", false],
   ["throw", false],
   ["400", false],
@@ -154,13 +159,17 @@ for (const [behaviour, expectGemini] of [
     const next = calls.slice(2).map((c) => c.model).join(">");
     report(next === "fallback-model", "translate: a model that just failed is skipped on the next line", next);
   }
+  if (behaviour === "503-twice") {
+    const order = calls.map((c) => c.model).join(">");
+    report(order === "primary-model>fallback-model>primary-model", "translate: all models busy -> pause and one more round", order);
+  }
   if (behaviour === "hang-primary") {
     report(r.ms < 1000, "translate: a hanging primary still leaves time for the fallback", `${r.ms}ms`);
   }
   if (["401", "404", "429"].includes(behaviour)) {
     const again = await post("/api/translate", { ...sample, text: `second ${behaviour}` });
     // Every model in the chain gets one try, except on a bad key; then the cooldown skips Gemini.
-    const expectedCalls = behaviour === "401" ? 1 : 2;
+    const expectedCalls = { 401: 1, 404: 2, 429: 4 }[behaviour];
     report(
       calls.length === expectedCalls && again.body.engine !== "gemini",
       `translate: after ${behaviour}, Gemini is skipped (cooldown)`,

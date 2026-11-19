@@ -38,6 +38,7 @@ const modelChain = () => [config.geminiModel, ...config.geminiFallbackModels.fil
 // Models that just failed are skipped for a few minutes so the next line goes straight to one that works.
 const MODEL_SKIP_MS = 3 * 60_000;
 const MIN_ATTEMPT_MS = 1500;
+const RETRY_PAUSE_MS = Number(process.env.GEMINI_RETRY_PAUSE_MS ?? 600);
 const skipUntil = new Map();
 const liveChain = () => {
   const up = modelChain().filter((m) => (skipUntil.get(m) || 0) <= Date.now());
@@ -168,7 +169,8 @@ async function generateJson({ system, prompt, schema, timeoutMs, kind }) {
     }
   };
 
-  const chain = liveChain();
+  let chain = liveChain();
+  let round = 0;
   try {
     let text;
     for (let i = 0; ; i++) {
@@ -187,6 +189,16 @@ async function generateJson({ system, prompt, schema, timeoutMs, kind }) {
         // Another model may be up when this one is overloaded, throttled, slow or not served on this key.
         const retryable = e.kind === "timeout" || e.status === 429 || e.status === 404 || (e.status >= 500 && e.status < 600);
         if (retryable) skipUntil.set(model, Date.now() + MODEL_SKIP_MS);
+        // Google sheds free-tier load in short spikes: when every model is busy, pause and go round once more.
+        const busy = e.status === 429 || e.status === 503;
+        if (busy && last && round === 0 && deadline - Date.now() > minAttempt + RETRY_PAUSE_MS) {
+          log.warn("gemini_all_busy_retrying", { kind, pauseMs: RETRY_PAUSE_MS });
+          await new Promise((r) => setTimeout(r, RETRY_PAUSE_MS));
+          round = 1;
+          chain = modelChain();
+          i = -1;
+          continue;
+        }
         if (!retryable || last || deadline - Date.now() < minAttempt / 2) throw e;
         log.warn("gemini_model_unavailable", { kind, model, next: chain[i + 1], reason: e.kind, status: e.status });
       }
