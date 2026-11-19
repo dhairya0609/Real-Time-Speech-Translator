@@ -21,6 +21,7 @@ Object.assign(process.env, {
   GEMINI_RETRY_PAUSE_MS: "50",
   GEMINI_TIMEOUT_MS: "800",
   GEMINI_SUMMARY_TIMEOUT_MS: "1000",
+  GEMINI_ALTERNATIVES_TIMEOUT_MS: "1000",
   AI_TRANSLATE_PER_MIN: "1000",
   AI_TRANSLATE_PER_DAY: "1000",
   AI_SUMMARY_PER_HOUR: "1000",
@@ -179,6 +180,56 @@ for (const [behaviour, expectGemini] of [
       `gemini calls=${calls.length} ${again.ms}ms`
     );
   }
+}
+
+// --- Romanization and alternatives ----------------------------------------
+{
+  const romanStub = (romanized) => ({
+    models: {
+      generateContent: async (req) => {
+        if (/alternative translations/.test(req.config.systemInstruction)) {
+          return {
+            text: JSON.stringify({
+              alternatives: [
+                { label: "More formal", text: "क्या आप आ सकते हैं?", romanized: "kya aap aa sakte hain?" },
+                { label: "Same as before", text: "तुम आ सकते हो?" },
+                { label: "Shorter", text: "आओगे?", romanized: "aaoge?" },
+              ],
+            }),
+          };
+        }
+        return { text: JSON.stringify({ translation: "तुम आ सकते हो?", source_language: "en", romanized }) };
+      },
+    },
+  });
+  setGeminiClientForTests(romanStub("tum aa sakte ho?"));
+  let r = await post("/api/translate", { ...sample, text: "Can you come?", targetLang: "hi" });
+  report(r.body.romanized === "tum aa sakte ho?", "romanized: returned for a non-Latin target", r.body.romanized);
+  setGeminiClientForTests(romanStub("तुम"));
+  r = await post("/api/translate", { ...sample, text: "Can you come? (2)", targetLang: "hi" });
+  report(r.body.romanized === undefined, "romanized: dropped when it isn't Latin script");
+  setGeminiClientForTests(romanStub("anything"));
+  r = await post("/api/translate", { ...sample, text: "Can you come? (3)", targetLang: "fr" });
+  report(r.body.romanized === undefined, "romanized: never sent for Latin-script targets");
+
+  const alt = { text: "Can you come?", translation: "तुम आ सकते हो?", sourceLang: "en", targetLang: "hi", tone: "casual" };
+  r = await post("/api/alternatives", alt);
+  report(
+    r.status === 200 && r.body.alternatives.length === 2 && r.body.alternatives.every((a) => a.text !== alt.translation),
+    "alternatives: distinct options, current translation filtered out",
+    r.body.alternatives?.map((a) => a.label).join(", ")
+  );
+  for (const behaviour of ["hang", "throw", "prose"]) {
+    stub(behaviour);
+    r = await post("/api/alternatives", alt);
+    report(r.status === 502 && /alternatives/i.test(r.body.message) && r.ms < 4000, `alternatives: gemini ${behaviour} -> friendly 502`, `${r.body.message} ${r.ms}ms`);
+  }
+  stub("429");
+  r = await post("/api/alternatives", alt);
+  report(r.status === 429 && /busy/i.test(r.body.message), "alternatives: rate limit -> friendly 429", r.body.message);
+  setGeminiClientForTests(null);
+  r = await post("/api/alternatives", alt);
+  report(r.status === 503 && /aren't available/.test(r.body.message), "alternatives: no key -> friendly 503", r.body.message);
 }
 
 // --- Summary ----------------------------------------------------------------

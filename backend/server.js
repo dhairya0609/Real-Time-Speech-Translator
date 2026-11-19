@@ -6,7 +6,7 @@ import config from "./lib/config.js";
 import log from "./lib/log.js";
 import { LiveSession } from "./lib/liveSession.js";
 import { translate } from "./lib/translator.js";
-import { geminiConfigured, geminiCoolingDown, geminiHealth, geminiSummarize } from "./lib/gemini.js";
+import { geminiAlternatives, geminiConfigured, geminiCoolingDown, geminiHealth, geminiSummarize } from "./lib/gemini.js";
 import { clientIp, limiters, reserveAiCall } from "./lib/rateLimit.js";
 import { AUTO, isLanguageCode } from "./lib/languages.js";
 
@@ -75,7 +75,7 @@ app.post("/api/translate", route(async (req, res) => {
     res.set("Retry-After", String(Math.ceil(gate.retryAfterMs / 1000)));
     return res.status(429).json({
       error: "rate_limited",
-      message: "You're translating very quickly. Wait a few seconds and try again.",
+      message: "One moment, translating your earlier lines first.",
       retryAfterMs: gate.retryAfterMs,
     });
   }
@@ -97,6 +97,43 @@ app.post("/api/translate", route(async (req, res) => {
     ip,
   });
   return res.json({ text, ...r });
+}));
+
+app.post("/api/alternatives", route(async (req, res) => {
+  const ip = clientIp(req);
+  const { sourceLang = AUTO, targetLang, tone } = req.body || {};
+  const text = cleanText(req.body?.text, config.maxTextChars);
+  const translation = cleanText(req.body?.translation, config.maxTextChars * 2);
+  if (!text || !translation) return bad(res, "Nothing to rephrase.");
+  if (!validLanguages(sourceLang, targetLang)) return bad(res, "Unknown language.");
+
+  if (!geminiConfigured()) {
+    return res.status(503).json({ error: "ai_unconfigured", message: "Alternatives aren't available right now." });
+  }
+  const gate = limiters.httpTranslate.check(ip);
+  const slot = gate.ok && !geminiCoolingDown() ? reserveAiCall("translate", ip) : { ok: false, retryAfterMs: gate.retryAfterMs || 30_000 };
+  if (!slot.ok) {
+    res.set("Retry-After", String(Math.ceil((slot.retryAfterMs || 30_000) / 1000)));
+    return res.status(429).json({ error: "busy", message: "Alternatives are busy right now. Try again in a moment.", retryAfterMs: slot.retryAfterMs });
+  }
+  limiters.httpTranslate.hit(ip);
+
+  try {
+    const r = await geminiAlternatives({
+      text,
+      translation,
+      sourceLang,
+      targetLang,
+      tone: tone === "formal" ? "formal" : "casual",
+      context: cleanTurns(req.body.context, config.contextTurns, 400),
+    });
+    return res.json(r);
+  } catch (err) {
+    return res.status(err.kind === "rate_limited" ? 429 : 502).json({
+      error: "ai_error",
+      message: err.kind === "rate_limited" ? "Alternatives are busy right now. Try again in a moment." : "Couldn't find alternatives this time. Try again.",
+    });
+  }
 }));
 
 app.post("/api/summarize", route(async (req, res) => {

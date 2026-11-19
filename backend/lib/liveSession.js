@@ -253,6 +253,7 @@ export class LiveSession {
         type: "translation",
         id,
         translated: r.translated,
+        romanized: r.romanized,
         engine: r.engine,
         model: r.model,
         detectedLang: detectedLang || r.detectedLang,

@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import config from "./config.js";
 import log, { redact } from "./log.js";
-import { AUTO, languageName } from "./languages.js";
+import { AUTO, languageName, usesLatinScript } from "./languages.js";
 
 let client = null;
 let stubClient = null;
@@ -231,9 +231,19 @@ const TRANSLATION_SCHEMA = {
   properties: {
     translation: { type: "string" },
     source_language: { type: "string", description: "ISO 639-1 code of the CURRENT utterance" },
+    romanized: { type: "string", description: "The translation in Latin letters, or empty" },
   },
   required: ["translation", "source_language"],
 };
+
+const ROMANIZE_RULE =
+  "Also give \"romanized\": the translation written in Latin letters the way native speakers casually type it (for Hindi, everyday Hinglish spelling; for Chinese, pinyin with tone marks; for Japanese, Hepburn).";
+
+function cleanRomanized(value, targetLang) {
+  if (usesLatinScript(targetLang) || typeof value !== "string") return undefined;
+  const v = value.trim();
+  return v && /^[\p{Script=Latin}\p{N}\p{P}\p{Zs}\p{M}'’-]+$/u.test(v) ? v : undefined;
+}
 
 /**
  * Translates `text` using the previous turns as context.
@@ -246,6 +256,7 @@ export async function geminiTranslate({ text, sourceLang, targetLang, tone, cont
     "Translate only the CURRENT utterance. Earlier turns are context: use them to resolve pronouns, gender, tone and references, never translate or repeat them.",
     "Render idioms with natural equivalents, keep names and numbers, fix obvious speech-recognition slips, and do not add explanations.",
     `Register: ${TONES[tone] || TONES.casual}.`,
+    usesLatinScript(targetLang) ? 'Set "romanized" to an empty string.' : ROMANIZE_RULE,
   ].join(" ");
 
   const history = context
@@ -264,7 +275,71 @@ export async function geminiTranslate({ text, sourceLang, targetLang, tone, cont
   const translated = typeof out.translation === "string" ? out.translation.trim() : "";
   if (!translated) throw new GeminiError("bad_output", "Gemini returned an empty translation");
   const detected = typeof out.source_language === "string" ? out.source_language.trim().toLowerCase() : "";
-  return { translated, detectedLang: /^[a-z]{2,3}$/.test(detected) ? detected : undefined, model };
+  return {
+    translated,
+    romanized: cleanRomanized(out.romanized, targetLang),
+    detectedLang: /^[a-z]{2,3}$/.test(detected) ? detected : undefined,
+    model,
+  };
+}
+
+const ALTERNATIVES_SCHEMA = {
+  type: "object",
+  properties: {
+    alternatives: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          label: { type: "string", description: "1-3 English words describing how this version differs" },
+          text: { type: "string" },
+          romanized: { type: "string" },
+        },
+        required: ["label", "text"],
+      },
+    },
+  },
+  required: ["alternatives"],
+};
+
+/**
+ * Other ways to say the same line in the target language (more formal, more
+ * casual, shorter, more literal), DeepL-style.
+ */
+export async function geminiAlternatives({ text, translation, sourceLang, targetLang, tone, context = [] }) {
+  const from = sourceLang === AUTO ? "the speaker's language" : languageName(sourceLang);
+  const system = [
+    `You help someone choose how to say a line in ${languageName(targetLang)}. The line was said in ${from}.`,
+    "Return 3 alternative translations of the CURRENT line that differ in a useful way from the current translation and from each other,",
+    "for example more formal, more casual, shorter, or closer to the original wording. Keep the meaning; do not repeat the current translation.",
+    "Label each with 1-3 plain English words such as \"More formal\" or \"Shorter\".",
+    `The conversation's usual register is ${TONES[tone] || TONES.casual}.`,
+    usesLatinScript(targetLang) ? 'Leave "romanized" empty.' : "Give \"romanized\" for each in Latin letters the way native speakers casually type it.",
+  ].join(" ");
+  const history = context
+    .slice(-config.contextTurns)
+    .map((t, i) => `${i + 1}. ${t.original} => ${t.translated}`)
+    .join("\n");
+  const prompt = `${history ? `Earlier turns:\n${history}\n\n` : ""}CURRENT: ${text}\nCURRENT TRANSLATION: ${translation}`;
+
+  const { value: out, model } = await generateJson({
+    system,
+    prompt,
+    schema: ALTERNATIVES_SCHEMA,
+    timeoutMs: config.alternativesTimeoutMs,
+    kind: "alternatives",
+  });
+  const seen = new Set([translation.trim()]);
+  const alternatives = (Array.isArray(out.alternatives) ? out.alternatives : [])
+    .map((a) => ({
+      label: typeof a?.label === "string" ? a.label.trim().slice(0, 32) : "",
+      text: typeof a?.text === "string" ? a.text.trim() : "",
+      romanized: cleanRomanized(a?.romanized, targetLang),
+    }))
+    .filter((a) => a.text && !seen.has(a.text) && seen.add(a.text))
+    .slice(0, 4);
+  if (!alternatives.length) throw new GeminiError("bad_output", "Gemini returned no alternatives");
+  return { alternatives, model };
 }
 
 const SIDE = {

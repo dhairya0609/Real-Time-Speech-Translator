@@ -1,6 +1,6 @@
 import axios from "axios";
 import log from "./log.js";
-import { baseCode, googleCode } from "./languages.js";
+import { baseCode, googleCode, usesLatinScript } from "./languages.js";
 
 const TIMEOUT = 5000;
 const CACHE_MAX = 500;
@@ -15,11 +15,15 @@ function remember(key, value) {
 
 async function googleGtx(text, sourceLang, targetLang) {
   const { data } = await axios.get("https://translate.googleapis.com/translate_a/single", {
-    params: { client: "gtx", sl: googleCode(sourceLang), tl: googleCode(targetLang), dt: "t", q: text },
+    params: { client: "gtx", sl: googleCode(sourceLang), tl: googleCode(targetLang), dt: ["t", "rm"], q: text },
+    paramsSerializer: { indexes: null },
     timeout: TIMEOUT,
   });
+  const parts = data[0].filter((part) => typeof part[0] === "string");
+  const romanization = data[0].find((part) => part[0] == null && typeof part[2] === "string");
   return {
-    translated: data[0].map((part) => part[0]).join(""),
+    translated: parts.map((part) => part[0]).join(""),
+    romanized: romanization?.[2] || undefined,
     detectedLang: typeof data[2] === "string" ? data[2] : undefined,
   };
 }
@@ -76,9 +80,14 @@ export async function legacyTranslate(text, sourceLang, targetLang) {
     if (Date.now() < (downUntil.get(fn) || 0)) continue;
     const started = Date.now();
     try {
-      const { translated, detectedLang } = await fn(text, sourceLang, targetLang);
+      const { translated, romanized, detectedLang } = await fn(text, sourceLang, targetLang);
       if (typeof translated !== "string" || !translated.trim()) throw new Error("empty response");
-      const result = { translated: translated.trim(), engine, detectedLang: detectedLang ? baseCode(detectedLang) : undefined };
+      const result = {
+        translated: translated.trim(),
+        engine,
+        detectedLang: detectedLang ? baseCode(detectedLang) : undefined,
+        ...(romanized && !usesLatinScript(targetLang) ? { romanized } : {}),
+      };
       remember(key, result);
       log.info("legacy_translate", { engine, ms: Date.now() - started, chars: text.length });
       return result;

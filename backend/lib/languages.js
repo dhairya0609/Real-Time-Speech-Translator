@@ -2,6 +2,14 @@ const displayNames = new Intl.DisplayNames(["en"], { type: "language" });
 
 export const AUTO = "auto";
 
+const NON_LATIN = new Set(
+  "am ar be bg bn el fa gu he hi hy ja ka kk km kn ko lo mk ml mn mr my ne pa ru si sr ta te tg th uk ur zh".split(" ")
+);
+
+export function usesLatinScript(code) {
+  return !NON_LATIN.has(String(code || "").split("-")[0].toLowerCase());
+}
+
 const CODE_RE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,4})?$/;
 
 export function isLanguageCode(code) {

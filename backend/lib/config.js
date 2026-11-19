@@ -42,6 +42,7 @@ const config = {
   geminiThinkingLevel: str("GEMINI_THINKING_LEVEL", "LOW").toUpperCase(),
   translateTimeoutMs: int("GEMINI_TIMEOUT_MS", 5000),
   summaryTimeoutMs: int("GEMINI_SUMMARY_TIMEOUT_MS", 20000),
+  alternativesTimeoutMs: int("GEMINI_ALTERNATIVES_TIMEOUT_MS", 9000),
   contextTurns: int("TRANSLATION_CONTEXT_TURNS", 3),
 
   limits: {
