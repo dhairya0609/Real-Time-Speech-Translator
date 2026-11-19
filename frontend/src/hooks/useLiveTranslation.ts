@@ -7,6 +7,7 @@ export type MicError = { code: string; message: string };
 export type LiveTranslation = {
   id: string;
   translated: string;
+  romanized?: string;
   engine: Engine;
   model?: string;
   detectedLang?: string;

@@ -1,5 +1,5 @@
 import { API_URL } from "../config";
-import type { Engine, Notice, SummarySide, Tone } from "../types";
+import type { Alternative, Engine, Notice, SummarySide, Tone } from "../types";
 
 export type ServerStatus = {
   stt: boolean;
@@ -13,7 +13,7 @@ export type ServerStatus = {
 };
 
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(public status: number, public code: string, message: string, public retryAfterMs = 0) {
     super(message);
   }
 }
@@ -29,7 +29,7 @@ async function request<T>(path: string, init: RequestInit & { timeoutMs?: number
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new ApiError(res.status, body.error || "http_error", body.message || "Something went wrong. Try again.");
+      throw new ApiError(res.status, body.error || "http_error", body.message || "Something went wrong. Try again.", Number(body.retryAfterMs) || 0);
     }
     return body as T;
   } catch (err) {
@@ -50,6 +50,7 @@ export function fetchStatus() {
 export type TranslateResponse = {
   text: string;
   translated: string;
+  romanized?: string;
   engine: Engine;
   model?: string;
   detectedLang?: string;
@@ -76,4 +77,15 @@ export function summarize(body: {
     body: JSON.stringify(body),
     timeoutMs: 45000,
   });
+}
+
+export function fetchAlternatives(body: {
+  text: string;
+  translation: string;
+  sourceLang: string;
+  targetLang: string;
+  tone: Tone;
+  context: { original: string; translated: string }[];
+}) {
+  return request<{ alternatives: Alternative[] }>("/api/alternatives", { method: "POST", body: JSON.stringify(body), timeoutMs: 30000 });
 }
