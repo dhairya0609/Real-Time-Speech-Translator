@@ -157,6 +157,7 @@ for (const [behaviour, expectGemini] of [
   if (behaviour === "503-primary") {
     const order = calls.map((c) => c.model).join(">");
     report(order === "primary-model>fallback-model", "translate: overloaded primary falls through to the next model", order);
+    report(r.body.model === "fallback-model", "translate: reports the model that actually answered", String(r.body.model));
     await post("/api/translate", { ...sample, text: "next line after 503" });
     const next = calls.slice(2).map((c) => c.model).join(">");
     report(next === "fallback-model", "translate: a model that just failed is skipped on the next line", next);

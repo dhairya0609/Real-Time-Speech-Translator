@@ -37,7 +37,7 @@ export async function translate({ text, sourceLang, targetLang, tone, context, i
     } else {
       try {
         const r = await geminiTranslate({ text, sourceLang, targetLang, tone, context });
-        return { ...r, engine: "gemini", model: config.geminiModel };
+        return { ...r, engine: "gemini" };
       } catch (err) {
         notice = FALLBACK_NOTICE[err.kind] || "ai_error";
       }

@@ -208,7 +208,7 @@ async function generateJson({ system, prompt, schema, timeoutMs, kind }) {
     const value = parseJsonLoose(text);
     health.lastOkAt = new Date().toISOString();
     log.info("gemini_ok", { kind, model: health.lastModel, ms: Date.now() - started, minimal: minimalConfig });
-    return value;
+    return { value, model: health.lastModel };
   } catch (err) {
     const e = classify(err);
     if (e.retryAfterMs) {
@@ -254,7 +254,7 @@ export async function geminiTranslate({ text, sourceLang, targetLang, tone, cont
     .join("\n");
   const prompt = `${history ? `Earlier turns:\n${history}\n\n` : ""}CURRENT: ${text}`;
 
-  const out = await generateJson({
+  const { value: out, model } = await generateJson({
     system,
     prompt,
     schema: TRANSLATION_SCHEMA,
@@ -264,7 +264,7 @@ export async function geminiTranslate({ text, sourceLang, targetLang, tone, cont
   const translated = typeof out.translation === "string" ? out.translation.trim() : "";
   if (!translated) throw new GeminiError("bad_output", "Gemini returned an empty translation");
   const detected = typeof out.source_language === "string" ? out.source_language.trim().toLowerCase() : "";
-  return { translated, detectedLang: /^[a-z]{2,3}$/.test(detected) ? detected : undefined };
+  return { translated, detectedLang: /^[a-z]{2,3}$/.test(detected) ? detected : undefined, model };
 }
 
 const SIDE = {
@@ -313,7 +313,7 @@ export async function geminiSummarize({ utterances, sourceLang, targetLang }) {
     if (budget >= 0) lines.unshift(line);
   }
 
-  const out = await generateJson({
+  const { value: out, model } = await generateJson({
     system,
     prompt: `Conversation (original, with translation in brackets):\n${lines.join("\n")}`,
     schema: SUMMARY_SCHEMA,
@@ -322,5 +322,5 @@ export async function geminiSummarize({ utterances, sourceLang, targetLang }) {
   });
   const result = { source: cleanSide(out.source), target: cleanSide(out.target) };
   if (!result.source.summary && !result.target.summary) throw new GeminiError("bad_output", "Gemini returned an empty summary");
-  return result;
+  return { ...result, model };
 }

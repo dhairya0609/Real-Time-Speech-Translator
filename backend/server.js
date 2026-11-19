@@ -125,8 +125,8 @@ app.post("/api/summarize", route(async (req, res) => {
   }
 
   try {
-    const summary = await geminiSummarize({ utterances, sourceLang, targetLang });
-    return res.json({ summary, model: config.geminiModel });
+    const { model, ...summary } = await geminiSummarize({ utterances, sourceLang, targetLang });
+    return res.json({ summary, model });
   } catch (err) {
     const limited = err.kind === "rate_limited" || (err.kind === "cooling_down" && geminiCoolingDown() === "rate_limited");
     return res.status(limited ? 429 : 502).json({
