@@ -31,7 +31,9 @@ let coolUntil = 0;
 let coolReason = null;
 // Set after a 400 on the full request: retry without schema/thinking config.
 let minimalConfig = false;
-const health = { lastOkAt: null, lastError: null };
+const health = { lastOkAt: null, lastError: null, lastModel: null };
+
+const modelChain = () => [config.geminiModel, ...config.geminiFallbackModels.filter((m) => m !== config.geminiModel)];
 
 export function geminiCoolingDown() {
   return Date.now() < coolUntil ? coolReason : null;
@@ -41,6 +43,8 @@ export function geminiHealth() {
   return {
     configured: geminiConfigured(),
     model: config.geminiModel,
+    fallbackModels: modelChain().slice(1),
+    lastModel: health.lastModel,
     coolingDown: geminiCoolingDown(),
     minimalConfig,
     lastOkAt: health.lastOkAt,
@@ -55,6 +59,7 @@ export function setGeminiClientForTests(fake) {
   minimalConfig = false;
   health.lastOkAt = null;
   health.lastError = null;
+  health.lastModel = null;
 }
 
 const COOLDOWN = { auth: 10 * 60_000, model: 10 * 60_000 };
@@ -72,7 +77,7 @@ function classify(err) {
     return new GeminiError("auth", "Gemini rejected the API key", { status, retryAfterMs: COOLDOWN.auth });
   }
   if (status === 404) {
-    return new GeminiError("model", `Model ${config.geminiModel} was not found`, { status, retryAfterMs: COOLDOWN.model });
+    return new GeminiError("model", "Model was not found", { status, retryAfterMs: COOLDOWN.model });
   }
   if (status === 400) return new GeminiError("invalid_request", message, { status });
   return new GeminiError("error", message, { status });
@@ -98,7 +103,7 @@ function parseJsonLoose(text) {
   }
 }
 
-async function callOnce(c, { system, prompt, schema }, minimal, deadline) {
+async function callOnce(c, { system, prompt, schema }, minimal, deadline, model) {
   const remaining = deadline - Date.now();
   if (remaining <= 0) throw new GeminiError("timeout", "Gemini timed out");
   const controller = new AbortController();
@@ -111,7 +116,7 @@ async function callOnce(c, { system, prompt, schema }, minimal, deadline) {
   });
   const base = { abortSignal: controller.signal, httpOptions: { timeout: remaining } };
   const request = c.models.generateContent({
-    model: config.geminiModel,
+    model,
     contents: prompt,
     config: minimal
       ? { ...base, systemInstruction: `${system} Reply with only a JSON object shaped like this JSON Schema: ${JSON.stringify(schema)}` }
@@ -140,20 +145,37 @@ async function generateJson({ system, prompt, schema, timeoutMs, kind }) {
   const started = Date.now();
   const deadline = started + timeoutMs;
   const req = { system, prompt, schema };
-  try {
-    let text;
+  const attempt = async (model) => {
     try {
-      text = await callOnce(c, req, minimalConfig, deadline);
+      return await callOnce(c, req, minimalConfig, deadline, model);
     } catch (err) {
       const e = classify(err);
       if (e.kind !== "invalid_request" || minimalConfig) throw e;
       minimalConfig = true;
-      log.warn("gemini_minimal_config", { model: config.geminiModel, error: e.message });
-      text = await callOnce(c, req, true, deadline);
+      log.warn("gemini_minimal_config", { model, error: e.message });
+      return callOnce(c, req, true, deadline, model);
+    }
+  };
+
+  const chain = modelChain();
+  try {
+    let text;
+    for (let i = 0; ; i++) {
+      try {
+        text = await attempt(chain[i]);
+        health.lastModel = chain[i];
+        break;
+      } catch (err) {
+        const e = classify(err);
+        // Another model may be up when this one is overloaded, throttled or not served on this key.
+        const retryable = e.status === 429 || e.status === 404 || (e.status >= 500 && e.status < 600);
+        if (!retryable || i === chain.length - 1 || Date.now() >= deadline) throw e;
+        log.warn("gemini_model_unavailable", { kind, model: chain[i], next: chain[i + 1], status: e.status });
+      }
     }
     const value = parseJsonLoose(text);
     health.lastOkAt = new Date().toISOString();
-    log.info("gemini_ok", { kind, model: config.geminiModel, ms: Date.now() - started, minimal: minimalConfig });
+    log.info("gemini_ok", { kind, model: health.lastModel, ms: Date.now() - started, minimal: minimalConfig });
     return value;
   } catch (err) {
     const e = classify(err);
@@ -162,7 +184,7 @@ async function generateJson({ system, prompt, schema, timeoutMs, kind }) {
       coolReason = e.kind;
     }
     health.lastError = { kind: e.kind, status: e.status, at: new Date().toISOString() };
-    log.warn("gemini_failed", { kind, model: config.geminiModel, ms: Date.now() - started, reason: e.kind, status: e.status, error: e.message });
+    log.warn("gemini_failed", { kind, models: chain.join(","), ms: Date.now() - started, reason: e.kind, status: e.status, error: e.message });
     throw e;
   }
 }

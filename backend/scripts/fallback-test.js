@@ -16,6 +16,8 @@ Object.assign(process.env, {
   DEEPGRAM_API_KEY: "fake-deepgram-key",
   DEEPGRAM_WS_URL: `ws://127.0.0.1:${fakeDg.address().port}/v1/listen`,
   DEEPGRAM_MODE: mode,
+  GEMINI_MODEL: "primary-model",
+  GEMINI_FALLBACK_MODELS: "fallback-model",
   GEMINI_TIMEOUT_MS: "800",
   GEMINI_SUMMARY_TIMEOUT_MS: "1000",
   AI_TRANSLATE_PER_MIN: "1000",
@@ -64,6 +66,11 @@ function stub(behaviour) {
             throw err(404, "models/gemini-x is not found for API version v1");
           case "429":
             throw err(429, "Resource has been exhausted. Please retry in 12.5s.");
+          case "503-primary":
+            if (req.model === "primary-model") throw err(503, "The model is overloaded. Please try again later.");
+            return { text: good };
+          case "503":
+            throw err(503, "The model is overloaded. Please try again later.");
           case "hang":
             return new Promise(() => {});
           case "empty":
@@ -112,6 +119,8 @@ for (const [behaviour, expectGemini] of [
   ["ok", true],
   ["fenced", true],
   ["400-then-minimal", true],
+  ["503-primary", true],
+  ["503", false],
   ["throw", false],
   ["400", false],
   ["401", false],
@@ -134,10 +143,16 @@ for (const [behaviour, expectGemini] of [
   if (behaviour === "ok") {
     report(calls[0]?.contents.includes("Hi Marie. => Salut Marie."), "translate: previous turns are sent as context");
   }
+  if (behaviour === "503-primary") {
+    const order = calls.map((c) => c.model).join(">");
+    report(order === "primary-model>fallback-model", "translate: overloaded primary falls through to the next model", order);
+  }
   if (["401", "404", "429"].includes(behaviour)) {
     const again = await post("/api/translate", { ...sample, text: `second ${behaviour}` });
+    // Every model in the chain gets one try, except on a bad key; then the cooldown skips Gemini.
+    const expectedCalls = behaviour === "401" ? 1 : 2;
     report(
-      calls.length === 1 && again.body.engine !== "gemini",
+      calls.length === expectedCalls && again.body.engine !== "gemini",
       `translate: after ${behaviour}, Gemini is skipped (cooldown)`,
       `gemini calls=${calls.length} ${again.ms}ms`
     );

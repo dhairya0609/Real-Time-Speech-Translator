@@ -34,6 +34,11 @@ const config = {
 
   geminiKey: str("GEMINI_API_KEY"),
   geminiModel: str("GEMINI_MODEL", "gemini-3.8-flash"),
+  // Tried in order when a model is overloaded, rate-limited or missing on this key.
+  geminiFallbackModels: str("GEMINI_FALLBACK_MODELS", "gemini-3.6-flash,gemini-3.5-flash-lite")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean),
   geminiThinkingLevel: str("GEMINI_THINKING_LEVEL", "LOW").toUpperCase(),
   translateTimeoutMs: int("GEMINI_TIMEOUT_MS", 5000),
   summaryTimeoutMs: int("GEMINI_SUMMARY_TIMEOUT_MS", 20000),
