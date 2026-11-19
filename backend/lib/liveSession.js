@@ -84,7 +84,7 @@ export class LiveSession {
     try {
       msg = JSON.parse(data.toString());
     } catch {
-      return this.fail("bad_message", "Malformed message");
+      return this.fail("bad_message", "Something went wrong. Try again.");
     }
 
     switch (msg.type) {
@@ -99,14 +99,14 @@ export class LiveSession {
       case "ping":
         return this.send({ type: "pong" });
       default:
-        return this.fail("bad_message", "Unknown message type");
+        return this.fail("bad_message", "Something went wrong. Try again.");
     }
   }
 
   start() {
     if (this.dg) this.closeDeepgram();
     if (!config.deepgramKey) {
-      return this.fail("stt_unconfigured", "Live speech isn't set up on this server yet.");
+      return this.fail("stt_unconfigured", "Voice input isn't available right now. You can still type.");
     }
     let url;
     let sttLabel;
@@ -114,7 +114,7 @@ export class LiveSession {
     if (this.enhanced) {
       const stt = resolveSttLanguage(this.sourceLang);
       if (!stt) {
-        return this.fail("stt_language", "Live speech isn't available for this language yet. Type instead, or pick another language.");
+        return this.fail("stt_language", "Voice input doesn't support this language yet. Type instead, or pick another language.");
       }
       url = enhancedUrl(stt);
       sttLabel = stt;
@@ -126,8 +126,8 @@ export class LiveSession {
           code: "stt_language_fallback",
           message:
             this.sourceLang === AUTO
-              ? "Voice auto-detect is off on this server, so it's listening for English. Typed text is still auto-detected."
-              : `Live speech doesn't support ${languageName(this.sourceLang)} yet, so it's listening for English.`,
+              ? "Listening for English. Automatic language detection works for typed text."
+              : `Voice input doesn't support ${languageName(this.sourceLang)} yet, so it's listening for English. Typing works in any language.`,
         });
       }
       this.sttLang = language;
@@ -169,10 +169,10 @@ export class LiveSession {
       const status = Number(/Unexpected server response: (\d+)/.exec(err.message)?.[1]);
       log.error("stt_error", { status: status || undefined, error: err.message });
       if (this.dg !== dg || this.stopping) return;
-      if (status === 401 || status === 403) this.fail("stt_auth", "The speech service rejected this server's credentials.");
-      else if (status === 402) this.fail("stt_quota", "The speech service is out of credits for today.");
-      else if (status === 400) this.fail("stt_language", "Live speech isn't available for this language yet.");
-      else this.fail("stt_failed", "Couldn't reach the speech service. Try again in a moment.");
+      if (status === 401 || status === 403) this.fail("stt_auth", "Voice input is temporarily unavailable. You can still type.");
+      else if (status === 402) this.fail("stt_quota", "Voice input is temporarily unavailable. You can still type.");
+      else if (status === 400) this.fail("stt_language", "Voice input doesn't support this language yet. Type instead, or pick another language.");
+      else this.fail("stt_failed", "Voice input is temporarily unavailable. Try again in a moment.");
     });
 
     dg.on("close", () => {

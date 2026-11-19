@@ -156,13 +156,13 @@ const convo = {
 
 setGeminiClientForTests(null);
 let s = await post("/api/summarize", convo);
-report(s.status === 503 && s.body.error === "ai_unconfigured" && /isn't set up/.test(s.body.message), "summary: missing key -> friendly 503", s.body.message);
+report(s.status === 503 && s.body.error === "ai_unconfigured" && /aren't available/.test(s.body.message), "summary: missing key -> friendly 503", s.body.message);
 
 for (const behaviour of ["throw", "hang", "401", "429", "prose", "400"]) {
   stub(behaviour);
   s = await post("/api/summarize", convo);
   report(
-    [429, 502].includes(s.status) && typeof s.body.message === "string" && !/error:|stack|status/i.test(s.body.message) && s.ms < 5000,
+    [429, 502].includes(s.status) && typeof s.body.message === "string" && !/error:|stack|status|gemini|model|api/i.test(s.body.message) && s.ms < 5000,
     `summary: gemini ${behaviour} -> friendly ${s.status}`,
     `${s.body.message} ${s.ms}ms`
   );

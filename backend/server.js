@@ -108,7 +108,7 @@ app.post("/api/summarize", route(async (req, res) => {
   if (!geminiConfigured()) {
     return res.status(503).json({
       error: "ai_unconfigured",
-      message: "Summaries need the AI model, which isn't set up on this server yet.",
+      message: "Summaries aren't available right now. You can still export the transcript.",
     });
   }
   const slot = reserveAiCall("summary", clientIp(req));
@@ -118,8 +118,8 @@ app.post("/api/summarize", route(async (req, res) => {
       error: slot.reason,
       message:
         slot.reason === "ai_daily_cap"
-          ? "Today's free AI quota is used up. Try again tomorrow."
-          : "You've made a lot of summaries recently. Try again in a little while.",
+          ? "Summaries are paused for today due to high demand. You can still export the transcript."
+          : "You've made several summaries recently. Try again in a little while.",
       retryAfterMs: slot.retryAfterMs,
     });
   }
@@ -132,10 +132,10 @@ app.post("/api/summarize", route(async (req, res) => {
     return res.status(limited ? 429 : 502).json({
       error: limited ? "ai_rate_limited" : "ai_error",
       message: limited
-        ? "The AI model is busy right now. Try again in a minute."
+        ? "Summaries are busy right now. Try again in a minute."
         : err.kind === "timeout"
-          ? "The AI model took too long. Try again."
-          : "The AI model couldn't summarize this. Try again.",
+          ? "That took too long. Try again."
+          : "Couldn't summarize this conversation. Try again.",
     });
   }
 }));
@@ -156,7 +156,7 @@ wss.on("connection", (ws, req) => {
     ws.send(JSON.stringify({
       type: "error",
       code: "too_many_sessions",
-      message: "Too many live sessions from your network. Close other tabs and try again.",
+      message: "Live Translator is already listening in another tab. Close it and try again.",
     }));
     ws.close(1013, "Too many sessions");
     return;
