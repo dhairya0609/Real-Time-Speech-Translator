@@ -17,5 +17,5 @@ test("offers voice and typed translation", () => {
   render(<App />);
   expect(screen.getByRole("button", { name: /start listening/i })).toBeInTheDocument();
   expect(screen.getByLabelText(/type to translate/i)).toBeInTheDocument();
-  expect(screen.getByText(/speak or type to translate/i)).toBeInTheDocument();
+  expect(screen.getByText(/speak naturally/i)).toBeInTheDocument();
 });

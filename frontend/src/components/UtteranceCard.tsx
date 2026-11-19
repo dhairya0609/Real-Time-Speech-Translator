@@ -3,58 +3,41 @@ import {
   ArrowPathIcon,
   CheckIcon,
   ClipboardDocumentIcon,
-  MicrophoneIcon,
-  PencilSquareIcon,
+  LanguageIcon,
   SparklesIcon,
   SpeakerWaveIcon,
 } from "@heroicons/react/16/solid";
 import type { Utterance } from "../types";
-import { AUTO, bcp47, shortCode } from "../lib/languages";
+import { AUTO, bcp47, languageName, shortCode } from "../lib/languages";
 
-const NOTICE_TEXT: Record<string, string> = {
-  ai_unconfigured: "AI translation isn't configured on the server, so a classic translator was used.",
-  ai_rate_limited: "AI limit reached for now, so a classic translator was used.",
-  ai_daily_cap: "Today's free AI quota is used up, so a classic translator was used.",
-  ai_busy: "The AI model was busy, so a classic translator was used.",
-  ai_timeout: "The AI model was slow, so a classic translator was used.",
-  ai_error: "The AI model failed, so a classic translator was used.",
-  translation_failed: "Every translator failed for this one.",
-};
-
-const ENGINE_LABEL: Record<string, string> = {
-  google: "Google",
+const PROVIDER: Record<string, string> = {
+  google: "Google Translate",
   mymemory: "MyMemory",
-  libre: "Libre",
-  same: "Same language",
-  none: "Untranslated",
+  libre: "LibreTranslate",
 };
 
-function prettyModel(model?: string) {
-  if (!model) return "Gemini";
-  return model
-    .split("-")
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
+function engineTitle(u: Utterance) {
+  if (u.engine === "gemini") return "AI translation that takes the earlier lines into account";
+  if (u.engine === "same") return "Already in the target language";
+  const provider = PROVIDER[u.engine || ""];
+  return provider ? `Standard translation by ${provider}, without conversation context` : "";
 }
 
-const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
-
-export const EngineBadge: React.FC<{ u: Utterance }> = ({ u }) => {
-  if (u.status !== "done" || !u.engine) return null;
-  if (u.engine === "gemini") {
-    return (
-      <span className="inline-flex items-center gap-1 text-accent" title={`Translated by ${prettyModel(u.model)} with conversation context`}>
-        <SparklesIcon className="h-3 w-3" />
-        Gemini
-      </span>
-    );
-  }
+const EngineMark: React.FC<{ u: Utterance }> = ({ u }) => {
+  if (u.status !== "done" || !u.engine || u.engine === "none") return null;
+  const title = engineTitle(u);
   return (
-    <span title={u.notice ? NOTICE_TEXT[u.notice] : undefined} className="text-subtle">
-      {ENGINE_LABEL[u.engine] || u.engine}
+    <span title={title} aria-label={title} className="grid h-5 w-5 place-items-center">
+      {u.engine === "gemini" ? (
+        <SparklesIcon className="h-3 w-3 text-accent/80" />
+      ) : (
+        <LanguageIcon className="h-3 w-3 text-subtle/70" />
+      )}
     </span>
   );
 };
+
+const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
 
 type Props = {
   u: Utterance;
@@ -64,7 +47,8 @@ type Props = {
 const UtteranceCard: React.FC<Props> = ({ u, onRetry }) => {
   const [copied, setCopied] = useState(false);
   const source = u.sourceLang === AUTO ? u.detectedLang : u.sourceLang;
-  const time = new Date(u.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = new Date(u.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const other = u.speaker === "b";
 
   const copy = async () => {
     try {
@@ -85,18 +69,26 @@ const UtteranceCard: React.FC<Props> = ({ u, onRetry }) => {
   };
 
   return (
-    <article className="group animate-fade-up rounded-xl border border-line bg-surface p-4 shadow-card sm:p-5" data-testid="utterance">
-      <header className="mb-2 flex items-center gap-2 text-xs text-subtle">
-        {u.via === "voice" ? <MicrophoneIcon className="h-3 w-3" /> : <PencilSquareIcon className="h-3 w-3" />}
-        <span className="tabular-nums">{time}</span>
-        <span aria-hidden="true">·</span>
-        <span className="font-mono text-[11px]">
+    <article
+      data-testid="utterance"
+      data-speaker={u.speaker}
+      className={`group w-[92%] max-w-[40rem] animate-card-in rounded-2xl border p-4 sm:w-[88%] sm:p-5 ${
+        other ? "self-end border-accent/20 bg-accent/[0.045] dark:bg-accent/[0.07]" : "self-start border-line bg-surface shadow-card"
+      }`}
+    >
+      <header className="mb-1.5 flex h-5 items-center gap-1.5 text-xs text-subtle">
+        <span
+          className="font-medium"
+          title={`${languageName(source) || "Detected automatically"} to ${languageName(u.targetLang)}`}
+        >
           {source ? shortCode(source) : "AUTO"} → {shortCode(u.targetLang)}
         </span>
-        <span className="ml-auto flex items-center gap-2 text-xs font-medium">
+        <span aria-hidden="true">·</span>
+        <span className="tabular-nums">{time}</span>
+        <span className="ml-auto flex items-center gap-0.5">
           {u.status === "done" && u.translated && (
-            <span className="-my-1.5 flex opacity-100 transition-opacity sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
-              <button type="button" onClick={copy} className="icon-btn h-7 w-7" aria-label="Copy translation" title="Copy translation">
+            <span className="flex opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+              <button type="button" onClick={copy} className="icon-btn h-7 w-7" aria-label="Copy translation" title="Copy">
                 {copied ? <CheckIcon className="h-3.5 w-3.5 text-accent" /> : <ClipboardDocumentIcon className="h-3.5 w-3.5" />}
               </button>
               {canSpeak && (
@@ -104,14 +96,9 @@ const UtteranceCard: React.FC<Props> = ({ u, onRetry }) => {
                   <SpeakerWaveIcon className="h-3.5 w-3.5" />
                 </button>
               )}
-              {u.engine !== "gemini" && u.engine !== "same" && (
-                <button type="button" onClick={() => onRetry(u)} className="icon-btn hidden h-7 w-7 sm:inline-flex" aria-label="Translate again" title="Translate again">
-                  <ArrowPathIcon className="h-3.5 w-3.5" />
-                </button>
-              )}
             </span>
           )}
-          <EngineBadge u={u} />
+          <EngineMark u={u} />
         </span>
       </header>
 
@@ -119,43 +106,47 @@ const UtteranceCard: React.FC<Props> = ({ u, onRetry }) => {
         {u.original}
       </p>
 
-      <div className="mt-2.5">
+      <div className="mt-2">
         {u.status === "translating" && (
-          <div className="space-y-2 py-1" aria-label="Translating">
+          <div className="space-y-2 py-1.5" aria-label="Translating">
             <div className="skeleton h-4 w-4/5" />
             <div className="skeleton h-4 w-2/5" />
           </div>
         )}
         {u.status === "done" && (
-          <p className="text-lg font-medium leading-relaxed tracking-[-0.01em] text-fg sm:text-xl" lang={u.targetLang}>
+          <p key="done" className="animate-text-in text-lg font-medium leading-relaxed tracking-[-0.01em] text-fg sm:text-xl" lang={u.targetLang}>
             {u.translated}
           </p>
         )}
         {u.status === "failed" && (
-          <div className="flex items-center gap-3 text-sm text-danger">
-            <span>{u.error || "Couldn't translate this one."}</span>
-            <button type="button" onClick={() => onRetry(u)} className="inline-flex items-center gap-1 font-medium underline-offset-2 hover:underline">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-0.5 text-sm">
+            <span className="text-muted">{u.error || "Translation is temporarily unavailable."}</span>
+            <button type="button" onClick={() => onRetry(u)} className="inline-flex items-center gap-1 font-medium text-fg underline-offset-2 hover:underline">
               <ArrowPathIcon className="h-3.5 w-3.5" /> Retry
             </button>
           </div>
         )}
       </div>
-
     </article>
   );
 };
 
-export const InterimCard: React.FC<{ text: string; sourceLang: string }> = ({ text, sourceLang }) => (
-  <article className="animate-fade-up rounded-xl border border-dashed border-accent/40 bg-accent/[0.03] p-4 sm:p-5" aria-live="polite">
-    <header className="mb-2 flex items-center gap-2 text-xs text-accent">
+export const InterimCard: React.FC<{ text: string; sourceLang: string; other: boolean }> = ({ text, sourceLang, other }) => (
+  <article
+    className={`w-[92%] max-w-[40rem] animate-card-in rounded-2xl border border-dashed border-accent/40 p-4 sm:w-[88%] sm:p-5 ${
+      other ? "self-end" : "self-start"
+    }`}
+    aria-live="polite"
+  >
+    <header className="mb-1.5 flex h-5 items-center gap-2 text-xs font-medium text-accent">
       <span className="relative flex h-2 w-2">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
         <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
       </span>
-      Hearing you
+      Listening
     </header>
     <p className="text-[15px] leading-relaxed text-fg" lang={sourceLang !== AUTO ? sourceLang : undefined}>
-      {text || <span className="text-muted">Listening…</span>}
+      {text || <span className="text-muted">Start speaking…</span>}
       <span className="ml-0.5 inline-block h-4 w-[2px] translate-y-0.5 animate-caret bg-accent" />
     </p>
   </article>

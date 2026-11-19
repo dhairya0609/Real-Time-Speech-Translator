@@ -1,15 +1,6 @@
 import type { Summary, Utterance } from "../types";
 import { AUTO, languageName } from "./languages";
 
-const ENGINE_LABEL: Record<string, string> = {
-  gemini: "Gemini",
-  google: "Google Translate",
-  mymemory: "MyMemory",
-  libre: "LibreTranslate",
-  same: "same language",
-  none: "not translated",
-};
-
 function time(ts: number) {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
@@ -20,7 +11,7 @@ function sourceOf(u: Utterance) {
 
 export function toMarkdown(utterances: Utterance[], summary: Summary | null) {
   const started = utterances[0]?.at ?? Date.now();
-  const lines = [`# Conversation transcript`, "", `${new Date(started).toLocaleString()} · ${utterances.length} utterances`, ""];
+  const lines = [`# Conversation`, "", `${new Date(started).toLocaleString()} · ${utterances.length} messages · Live Translator`, ""];
 
   if (summary) {
     for (const [lang, side] of [
@@ -37,11 +28,11 @@ export function toMarkdown(utterances: Utterance[], summary: Summary | null) {
   lines.push("## Transcript", "");
   for (const u of utterances) {
     lines.push(
-      `**${time(u.at)}** · ${sourceOf(u)} → ${languageName(u.targetLang)} · _${ENGINE_LABEL[u.engine || "none"]}_`,
+      `**${time(u.at)}** · ${sourceOf(u)} → ${languageName(u.targetLang)}`,
       "",
       `> ${u.original}`,
       "",
-      u.translated || "_(no translation)_",
+      u.translated || "_(not translated)_",
       ""
     );
   }
@@ -61,7 +52,7 @@ export function toPlainText(utterances: Utterance[], summary: Summary | null) {
     }
   }
   for (const u of utterances) {
-    lines.push(`[${time(u.at)}] ${sourceOf(u)}: ${u.original}`, `[${time(u.at)}] ${languageName(u.targetLang)}: ${u.translated || "(no translation)"}`, "");
+    lines.push(`[${time(u.at)}] ${sourceOf(u)}: ${u.original}`, `[${time(u.at)}] ${languageName(u.targetLang)}: ${u.translated || "(not translated)"}`, "");
   }
   return lines.join("\n");
 }

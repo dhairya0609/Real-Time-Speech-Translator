@@ -14,6 +14,7 @@ export type Notice =
 export type Utterance = {
   id: string;
   via: "voice" | "text";
+  speaker: "a" | "b";
   at: number;
   original: string;
   sourceLang: string;

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { LanguageIcon } from "@heroicons/react/24/outline";
+import { LogoMark } from "./Logo";
 import UtteranceCard, { InterimCard } from "./UtteranceCard";
 import type { MicState, Utterance } from "../types";
 
@@ -14,12 +14,12 @@ type Props = {
   interim: string;
   micState: MicState;
   sourceLang: string;
-  aiOn: boolean;
+  speaker: "a" | "b";
   onRetry: (u: Utterance) => void;
   onSample: (text: string) => void;
 };
 
-const Timeline: React.FC<Props> = ({ utterances, interim, micState, sourceLang, aiOn, onRetry, onSample }) => {
+const Timeline: React.FC<Props> = ({ utterances, interim, micState, sourceLang, speaker, onRetry, onSample }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
   const showInterim = micState === "listening" || (micState === "connecting" && Boolean(interim));
@@ -39,25 +39,23 @@ const Timeline: React.FC<Props> = ({ utterances, interim, micState, sourceLang, 
 
   return (
     <div ref={scrollRef} onScroll={onScroll} className="scroll-area min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-      <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
+      <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6 sm:py-6">
         {empty ? (
-          <div className="m-auto flex max-w-md flex-col items-center py-8 text-center">
-            <div className="mb-4 grid h-11 w-11 place-items-center rounded-xl border border-line bg-surface text-accent shadow-card">
-              <LanguageIcon className="h-5 w-5" />
-            </div>
-            <h2 className="text-lg font-semibold tracking-tight">Speak or type to translate</h2>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted">
-              {aiOn
-                ? "Each line is translated by Gemini with the last few turns as context, so names, pronouns and tone carry over."
-                : "Each line is translated as soon as you finish it. Tap the mic, or try a phrase:"}
+          <div className="m-auto flex w-full max-w-md animate-fade-up flex-col items-center py-6 text-center">
+            <LogoMark className="mb-5 h-12 w-12 rounded-[14px] shadow-[0_10px_30px_-10px_rgb(var(--accent)/0.6)]" />
+            <h2 className="text-balance text-xl font-semibold tracking-[-0.02em] sm:text-2xl">Speak naturally. Be understood.</h2>
+            <p className="mt-2 text-balance text-[15px] leading-relaxed text-muted">
+              Live translation that keeps track of the conversation, not just the words.
             </p>
-            <div className="mt-5 flex flex-col items-stretch gap-2 sm:items-center">
-              {SAMPLES.map((s) => (
+            <p className="mb-2.5 mt-7 text-xs font-medium uppercase tracking-wider text-subtle">Try a phrase</p>
+            <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-center">
+              {SAMPLES.map((s, i) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => onSample(s)}
-                  className="rounded-full border border-line bg-surface px-3.5 py-2 text-left text-sm text-muted shadow-card transition-colors hover:border-accent/40 hover:text-fg sm:text-center"
+                  style={{ animationDelay: `${80 + i * 60}ms` }}
+                  className="animate-fade-up rounded-xl border border-line bg-surface px-4 py-2.5 text-left text-sm text-muted shadow-card transition-colors hover:border-accent/40 hover:text-fg sm:rounded-full sm:text-center"
                 >
                   {s}
                 </button>
@@ -69,7 +67,7 @@ const Timeline: React.FC<Props> = ({ utterances, interim, micState, sourceLang, 
             {utterances.map((u) => (
               <UtteranceCard key={u.id} u={u} onRetry={onRetry} />
             ))}
-            {showInterim && <InterimCard text={interim} sourceLang={sourceLang} />}
+            {showInterim && <InterimCard text={interim} sourceLang={sourceLang} other={speaker === "b"} />}
           </>
         )}
       </div>

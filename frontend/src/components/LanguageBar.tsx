@@ -63,7 +63,7 @@ const LanguageBar: React.FC<Props> = ({ sourceLang, targetLang, detected, autoHi
           }}
           disabled={!canSwap}
           aria-label="Swap languages"
-          title={canSwap ? "Swap languages" : "Speak or type first so the source language is known"}
+          title={canSwap ? "Swap languages (S) to let the other person reply" : "Speak or type first so the language is known"}
           className="icon-btn h-10 w-10 rounded-full"
         >
           <ArrowsRightLeftIcon className="h-4 w-4 transition-transform duration-300" style={{ transform: `rotate(${turns * 180}deg)` }} />

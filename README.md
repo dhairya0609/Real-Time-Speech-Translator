@@ -11,9 +11,11 @@ Speak or type in one language and read a live, context-aware translation in anot
 - **Type to translate.** No mic, or permission denied? Type instead; it goes through the same AI path. Sample phrases let first-time visitors try it in one click.
 - **Summarize.** One click produces a short summary and action items in both languages.
 - **Export.** Download the transcript (plus the summary, if any) as Markdown or plain text.
-- **Read aloud and copy** on every card, light and dark themes, keyboard shortcut (Space) for the mic.
+- **Conversation mode.** Swapping languages hands the conversation to the other person; their lines align to the other side, like a chat.
+- **Read aloud and copy** on every card, light and dark themes, and keyboard shortcuts (Space to talk, `/` to type, `S` to swap, `?` for the list).
+- **Friendly first run.** Sample phrases, a short explanation before the browser's microphone prompt, a progress indicator while the free-tier backend wakes up, and an About sheet with the privacy note (audio is never stored; the conversation stays in the browser tab).
 - **Auto-detect.** Typed text is always auto-detected. Spoken auto-detect uses Deepgram nova-3 multilingual and is opt-in (see `DEEPGRAM_MODE`).
-- **Shows its work.** Each card says which engine translated it (Gemini, Google, MyMemory or Libre) and why a fallback was used.
+- **Shows its work, quietly.** A small icon on each card marks AI versus standard translation; hovering it names the provider.
 
 ## How translation and fallback work
 

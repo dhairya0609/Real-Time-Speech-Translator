@@ -63,7 +63,6 @@ const SummaryPanel: React.FC<Props> = ({ open, loading, error, summary, stale, c
           <h2 id="summary-title" className="text-base font-semibold tracking-tight">
             Summary
           </h2>
-          {summary?.model && <span className="font-mono text-[11px] text-subtle">{summary.model}</span>}
           <button ref={closeRef} type="button" onClick={onClose} className="icon-btn ml-auto" aria-label="Close summary">
             <XMarkIcon className="h-5 w-5" />
           </button>

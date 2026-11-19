@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { XMarkIcon } from "@heroicons/react/20/solid";
-import Header, { ServerState } from "./Header";
-import LanguageBar, { ToneToggle } from "./LanguageBar";
+import Header from "./Header";
+import LanguageBar from "./LanguageBar";
 import Timeline from "./Timeline";
 import Waveform from "./Waveform";
 import MicButton from "./MicButton";
 import Composer from "./Composer";
 import SummaryPanel from "./SummaryPanel";
+import AboutSheet from "./AboutSheet";
+import ShortcutsSheet from "./ShortcutsSheet";
+import MicPrimer from "./MicPrimer";
+import StartupNotice, { TopProgress } from "./StartupNotice";
 import { useTheme } from "../hooks/useTheme";
 import { LiveTranslation, useLiveTranslation } from "../hooks/useLiveTranslation";
-import { ApiError, fetchStatus, summarize, translateText } from "../lib/api";
+import { ApiError, fetchStatus, ServerStatus, summarize, translateText } from "../lib/api";
 import { AUTO, languageName } from "../lib/languages";
 import { download, exportName, toMarkdown, toPlainText } from "../lib/export";
 import { load, save } from "../lib/storage";
@@ -17,13 +21,15 @@ import type { Notice, Summary, Tone, Utterance } from "../types";
 
 type Settings = { sourceLang: string; targetLang: string; tone: Tone };
 type Banner = { text: string; action?: { label: string; run: () => void } } | null;
+type ServerState = { phase: "waking" | "ready" | "offline"; status: ServerStatus | null };
 
 const DEFAULT_SETTINGS: Settings = { sourceLang: "en", targetLang: "hi", tone: "casual" };
+const UNAVAILABLE = "Translation is temporarily unavailable.";
 
 const BANNER_FOR: Partial<Record<Notice, string>> = {
-  ai_rate_limited: "You've hit the AI translation limit for now, so lines use classic translation for a bit.",
-  ai_daily_cap: "Today's free AI quota is used up. Translation continues with the classic engine until tomorrow.",
-  ai_busy: "The AI model is busy right now, so classic translation is filling in.",
+  ai_rate_limited: "It's busy right now, so translations may miss some context for a few minutes.",
+  ai_busy: "It's busy right now, so translations may miss some context for a few minutes.",
+  ai_daily_cap: "High demand today. Translations continue, but may miss some context from earlier lines.",
 };
 
 let localId = 0;
@@ -32,10 +38,24 @@ function spokenLanguage(u: Utterance) {
   return u.sourceLang === AUTO ? u.detectedLang : u.sourceLang;
 }
 
+async function micPermission(): Promise<PermissionState> {
+  try {
+    const r = await navigator.permissions.query({ name: "microphone" as PermissionName });
+    return r.state;
+  } catch {
+    return "prompt";
+  }
+}
+
+function isTyping(target: EventTarget | null) {
+  return Boolean((target as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable='true']"));
+}
+
 const App: React.FC = () => {
   const { theme, toggle: toggleTheme } = useTheme();
   const [settings, setSettings] = useState<Settings>(() => ({ ...DEFAULT_SETTINGS, ...load("lt.settings", {}) }));
   const [utterances, setUtterances] = useState<Utterance[]>([]);
+  const [speaker, setSpeaker] = useState<"a" | "b">("a");
   const [server, setServer] = useState<ServerState>({ phase: "waking", status: null });
   const [banner, setBanner] = useState<Banner>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -43,14 +63,20 @@ const App: React.FC = () => {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [summaryAt, setSummaryAt] = useState(0);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [primer, setPrimer] = useState<"prompt" | "denied" | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const seenNotices = useRef(new Set<string>());
   const utterancesRef = useRef(utterances);
   utterancesRef.current = utterances;
+  const speakerRef = useRef(speaker);
+  speakerRef.current = speaker;
 
   const { sourceLang, targetLang, tone } = settings;
   const status = server.status;
   const maxChars = status?.maxTextChars ?? 1000;
+  const setTone = useCallback((t: Tone) => setSettings((s) => ({ ...s, tone: t })), []);
 
   useEffect(() => save("lt.settings", settings), [settings]);
 
@@ -68,10 +94,9 @@ const App: React.FC = () => {
   }, []);
 
   const noteNotice = useCallback((notice?: Notice) => {
-    if (!notice || seenNotices.current.has(notice)) return;
-    const text = BANNER_FOR[notice];
-    if (!text) return;
-    seenNotices.current.add(notice);
+    const text = notice && BANNER_FOR[notice];
+    if (!text || seenNotices.current.has(text)) return;
+    seenNotices.current.add(text);
     setBanner({ text });
   }, []);
 
@@ -79,7 +104,7 @@ const App: React.FC = () => {
     onUtterance: ({ id, text, detectedLang }) => {
       setUtterances((list) => [
         ...list,
-        { id, via: "voice", at: Date.now(), original: text, sourceLang, targetLang, detectedLang, status: "translating" },
+        { id, via: "voice", speaker: speakerRef.current, at: Date.now(), original: text, sourceLang, targetLang, detectedLang, status: "translating" },
       ]);
     },
     onTranslation: (t: LiveTranslation) => {
@@ -92,7 +117,7 @@ const App: React.FC = () => {
         notice: t.notice,
         targetLang: t.targetLang || targetLang,
         ...(t.detectedLang ? { detectedLang: t.detectedLang } : {}),
-        error: ok ? undefined : "Couldn't translate this one.",
+        error: ok ? undefined : UNAVAILABLE,
       });
       noteNotice(t.notice);
     },
@@ -126,12 +151,13 @@ const App: React.FC = () => {
         model: r.model,
         notice: r.notice,
         detectedLang: u.detectedLang || r.detectedLang,
-        error: ok ? undefined : "Every translator failed for this one. Try again in a moment.",
+        error: ok ? undefined : UNAVAILABLE,
       });
       noteNotice(r.notice);
       if (server.phase !== "ready") loadStatus();
     } catch (err) {
-      patch(u.id, { status: "failed", error: (err as ApiError).message });
+      const e = err as ApiError;
+      patch(u.id, { status: "failed", error: e.status === 429 || e.status === 400 ? e.message : UNAVAILABLE });
     }
   };
 
@@ -139,6 +165,7 @@ const App: React.FC = () => {
     const u: Utterance = {
       id: `t${++localId}`,
       via: "text",
+      speaker,
       at: Date.now(),
       original: text,
       sourceLang,
@@ -150,7 +177,7 @@ const App: React.FC = () => {
   };
 
   const retry = (u: Utterance) => {
-    const next: Utterance = { ...u, status: "translating", error: undefined, targetLang };
+    const next: Utterance = { ...u, status: "translating", error: undefined };
     patch(u.id, next);
     runTranslation(next);
   };
@@ -161,11 +188,12 @@ const App: React.FC = () => {
     return undefined;
   }, [utterances, sourceLang]);
 
-  const swap = () => {
+  const swap = useCallback(() => {
     const from = sourceLang === AUTO ? detected : sourceLang;
     if (!from) return;
     setSettings((s) => ({ ...s, sourceLang: s.targetLang, targetLang: from }));
-  };
+    setSpeaker((p) => (p === "a" ? "b" : "a"));
+  }, [sourceLang, detected]);
 
   const doneCount = utterances.filter((u) => u.status === "done").length;
 
@@ -173,7 +201,7 @@ const App: React.FC = () => {
     setSummaryOpen(true);
     setSummaryError(null);
     if (status && !status.ai) {
-      setSummaryError("Summaries need the AI model, which isn't set up on this server yet. Export still works.");
+      setSummaryError("Summaries aren't available right now. You can still export the transcript from the menu.");
       return;
     }
     setSummaryLoading(true);
@@ -211,10 +239,11 @@ const App: React.FC = () => {
   };
 
   const clear = () => {
-    const snapshot = { utterances, summary, summaryAt };
+    const snapshot = { utterances, summary, summaryAt, speaker };
     setUtterances([]);
     setSummary(null);
     setSummaryAt(0);
+    setSpeaker("a");
     setBanner({
       text: "Conversation cleared.",
       action: {
@@ -223,6 +252,7 @@ const App: React.FC = () => {
           setUtterances(snapshot.utterances);
           setSummary(snapshot.summary);
           setSummaryAt(snapshot.summaryAt);
+          setSpeaker(snapshot.speaker);
           setBanner(null);
         },
       },
@@ -232,29 +262,50 @@ const App: React.FC = () => {
   const micDisabled = server.phase === "ready" && status?.stt === false;
   const { state: micState, start, stop, dismissError } = live;
 
-  const onMic = useCallback(() => {
+  const onMic = useCallback(async () => {
     if (micState === "listening" || micState === "connecting") return stop();
+    if (micState === "processing") return undefined;
     if (micState === "error") dismissError();
-    return start();
+    const permission = await micPermission();
+    if (permission === "granted" || (permission === "prompt" && load("lt.micPrimed", false))) return start();
+    setPrimer(permission === "denied" ? "denied" : "prompt");
+    return undefined;
   }, [micState, start, stop, dismissError]);
 
   useEffect(() => {
+    if (live.error?.code === "mic_denied") setPrimer("denied");
+  }, [live.error]);
+
+  const anySheetOpen = summaryOpen || aboutOpen || shortcutsOpen || primer !== null;
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || e.repeat || summaryOpen || micDisabled) return;
-      if ((e.target as HTMLElement).closest("input, textarea, button, [role='listbox'], [role='menu']")) return;
-      e.preventDefault();
-      onMic();
+      if (anySheetOpen || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+      const onControl = Boolean((e.target as HTMLElement | null)?.closest?.("button, [role='listbox'], [role='menu']"));
+      if (e.code === "Space" && !e.repeat && !onControl && !micDisabled) {
+        e.preventDefault();
+        onMic();
+      } else if (e.key === "/") {
+        e.preventDefault();
+        composerRef.current?.focus();
+      } else if (e.key === "?") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      } else if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        swap();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onMic, summaryOpen, micDisabled]);
+  }, [onMic, swap, anySheetOpen, micDisabled]);
 
-  const pair = `${sourceLang === AUTO ? (detected ? languageName(detected) : "Auto") : languageName(sourceLang)} → ${languageName(targetLang)}`;
+  const pair = `${sourceLang === AUTO ? (detected ? languageName(detected) : "Auto-detect") : languageName(sourceLang)} → ${languageName(targetLang)}`;
 
   let statusLine: React.ReactNode;
   switch (micState) {
     case "connecting":
-      statusLine = live.slowStart ? "Waking up the server. Free hosting can take up to a minute…" : "Connecting…";
+      statusLine = live.slowStart ? "Starting up, this can take a few seconds…" : "Connecting…";
       break;
     case "listening":
       statusLine = (
@@ -278,10 +329,10 @@ const App: React.FC = () => {
       break;
     default:
       statusLine = micDisabled ? (
-        "Voice isn't set up on this server yet. Type below to translate."
+        "Voice input is unavailable right now. You can still type."
       ) : (
         <>
-          Tap the mic to speak
+          Tap to speak
           <span className="hidden sm:inline">
             {" "}
             or press <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 font-mono text-[11px] text-muted">Space</kbd>
@@ -292,19 +343,21 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
+      <TopProgress active={server.phase === "waking"} />
       <Header
-        server={server}
         theme={theme}
         hasContent={doneCount > 0}
+        tone={tone}
+        onTone={setTone}
         onToggleTheme={toggleTheme}
         onSummarize={openSummary}
         onExport={exportAs}
         onClear={clear}
-        onRetryServer={loadStatus}
-        mobileExtra={<ToneToggle compact value={tone} onChange={(t) => setSettings((s) => ({ ...s, tone: t }))} />}
+        onShortcuts={() => setShortcutsOpen(true)}
+        onAbout={() => setAboutOpen(true)}
       />
 
-      <div className="border-b border-line px-4 py-3 sm:px-6">
+      <div className="relative z-20 border-b border-line px-4 py-3 sm:px-6">
         <LanguageBar
           sourceLang={sourceLang}
           targetLang={targetLang}
@@ -314,7 +367,7 @@ const App: React.FC = () => {
           onSource={(code) => setSettings((s) => ({ ...s, sourceLang: code }))}
           onTarget={(code) => setSettings((s) => ({ ...s, targetLang: code }))}
           onSwap={swap}
-          onTone={(t) => setSettings((s) => ({ ...s, tone: t }))}
+          onTone={setTone}
         />
       </div>
 
@@ -323,13 +376,14 @@ const App: React.FC = () => {
         interim={live.interim}
         micState={micState}
         sourceLang={sourceLang}
-        aiOn={Boolean(status?.ai)}
+        speaker={speaker}
         onRetry={retry}
         onSample={translateTyped}
       />
 
-      <footer className="border-t border-line bg-bg/80 backdrop-blur">
-        <div className="mx-auto w-full max-w-3xl px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
+      <footer className="border-t border-line bg-bg/85 backdrop-blur">
+        <div className="mx-auto w-full max-w-3xl px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pb-4">
+          <StartupNotice phase={server.phase} onRetry={loadStatus} />
           {banner && (
             <div role="status" className="mb-3 flex animate-fade-up items-start gap-3 rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-muted shadow-card">
               <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
@@ -345,28 +399,30 @@ const App: React.FC = () => {
             </div>
           )}
 
-          <div className="relative flex h-16 items-center justify-center">
-            <Waveform
-              analyser={live.analyser}
-              active={micState === "listening" || micState === "connecting"}
-              gap={96}
-              className="absolute inset-0 h-full w-full"
-            />
-            <MicButton
-              state={micState}
-              analyser={live.analyser}
-              onClick={onMic}
-              disabled={micDisabled}
-              disabledReason="Voice isn't set up on this server yet"
-            />
-          </div>
-
-          <p className="mt-2 min-h-[1.25rem] text-center text-xs leading-5 text-muted" aria-live="polite">
-            {statusLine}
-          </p>
-
-          <div className="mt-3">
-            <Composer ref={composerRef} onSubmit={translateTyped} maxChars={maxChars} />
+          <div className="flex flex-col">
+            <div className="order-2 mt-3 sm:order-1 sm:mt-0">
+              <div className="relative flex h-16 items-center justify-center">
+                <Waveform
+                  analyser={live.analyser}
+                  active={micState === "listening" || micState === "connecting"}
+                  gap={96}
+                  className="absolute inset-0 h-full w-full"
+                />
+                <MicButton
+                  state={micState}
+                  analyser={live.analyser}
+                  onClick={onMic}
+                  disabled={micDisabled}
+                  disabledReason="Voice input is unavailable right now"
+                />
+              </div>
+              <p className="mt-2 min-h-[1.25rem] text-center text-xs leading-5 text-muted" aria-live="polite">
+                {statusLine}
+              </p>
+            </div>
+            <div className="order-1 sm:order-2 sm:mt-3">
+              <Composer ref={composerRef} onSubmit={translateTyped} maxChars={maxChars} />
+            </div>
           </div>
         </div>
       </footer>
@@ -380,6 +436,23 @@ const App: React.FC = () => {
         canRetry={status?.ai !== false}
         onClose={() => setSummaryOpen(false)}
         onRegenerate={runSummary}
+      />
+      <AboutSheet open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <MicPrimer
+        mode={primer}
+        onClose={() => setPrimer(null)}
+        onType={() => {
+          setPrimer(null);
+          dismissError();
+          requestAnimationFrame(() => composerRef.current?.focus());
+        }}
+        onContinue={() => {
+          save("lt.micPrimed", true);
+          setPrimer(null);
+          dismissError();
+          start();
+        }}
       />
     </div>
   );

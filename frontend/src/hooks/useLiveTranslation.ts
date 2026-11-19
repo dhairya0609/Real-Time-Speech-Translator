@@ -191,7 +191,7 @@ export function useLiveTranslation(settings: Settings, handlers: Handlers) {
           break;
         case "session_end":
           handlersRef.current.onNotice?.(
-            `Live sessions are capped at ${msg.minutes} minutes on this demo. Tap the mic to keep going.`
+            `Listening paused after ${msg.minutes} minutes. Tap the mic to keep going.`
           );
           break;
         case "notice":
@@ -206,7 +206,7 @@ export function useLiveTranslation(settings: Settings, handlers: Handlers) {
           }
           break;
         case "error":
-          fail({ code: msg.code || "server_error", message: msg.message || "Something went wrong on the server." });
+          fail({ code: msg.code || "server_error", message: msg.message || "Something went wrong. Try again." });
           break;
         default:
           break;
@@ -262,7 +262,7 @@ export function useLiveTranslation(settings: Settings, handlers: Handlers) {
     wsRef.current = ws;
     later(4000, () => setSlowStart(true));
     later(60000, () =>
-      fail({ code: "timeout", message: "The server didn't answer. It may still be waking up; try again in a few seconds." })
+      fail({ code: "timeout", message: "Couldn't start listening. Try again in a few seconds." })
     );
 
     ws.onopen = () => {
@@ -279,7 +279,7 @@ export function useLiveTranslation(settings: Settings, handlers: Handlers) {
     };
     ws.onclose = () => {
       if (stateRef.current === "processing") finish();
-      else fail({ code: "connection_lost", message: "Lost the connection to the server. Tap the mic to try again." });
+      else fail({ code: "connection_lost", message: "Connection lost. Tap the mic to continue." });
     };
     return undefined;
   }, [fail, finish, handleMessage, setState]);

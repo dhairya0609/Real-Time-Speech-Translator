@@ -29,15 +29,15 @@ async function request<T>(path: string, init: RequestInit & { timeoutMs?: number
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new ApiError(res.status, body.error || "http_error", body.message || "The server couldn't handle that request.");
+      throw new ApiError(res.status, body.error || "http_error", body.message || "Something went wrong. Try again.");
     }
     return body as T;
   } catch (err) {
     if (err instanceof ApiError) throw err;
     if ((err as Error).name === "AbortError") {
-      throw new ApiError(0, "timeout", "The server took too long to answer. It may be waking up; try again.");
+      throw new ApiError(0, "timeout", "This is taking longer than usual. Try again in a moment.");
     }
-    throw new ApiError(0, "network", "Can't reach the translation server. Check your connection and try again.");
+    throw new ApiError(0, "network", "Can't connect right now. Check your connection and try again.");
   } finally {
     clearTimeout(timer);
   }

@@ -43,10 +43,26 @@ module.exports = {
         "sheet-up": { from: { transform: "translateY(100%)" }, to: { transform: "translateY(0)" } },
         "sheet-in": { from: { transform: "translateX(100%)" }, to: { transform: "translateX(0)" } },
         "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
+        pop: {
+          from: { opacity: "0", transform: "translateY(8px) scale(0.98)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        indeterminate: {
+          from: { transform: "translateX(-100%)" },
+          to: { transform: "translateX(300%)" },
+        },
+        "card-in": {
+          from: { opacity: "0", transform: "translateY(10px) scale(0.985)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
         "fade-in": "fade-in 160ms ease-out both",
+        pop: "pop 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
+        indeterminate: "indeterminate 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+        "card-in": "card-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both",
+        "text-in": "fade-in 280ms ease-out both",
         shimmer: "shimmer 1.6s linear infinite",
         caret: "caret 1s steps(1) infinite",
         ring: "ring 1.6s cubic-bezier(0.2, 0.6, 0.3, 1) infinite",

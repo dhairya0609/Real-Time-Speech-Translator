@@ -73,6 +73,14 @@
     @apply inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-medium text-fg shadow-card transition-colors hover:bg-raised disabled:pointer-events-none disabled:opacity-40;
   }
 
+  .btn-primary {
+    @apply inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-fg px-3.5 text-sm font-medium text-bg transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .menu-item {
+    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-fg hover:bg-raised disabled:pointer-events-none disabled:opacity-40;
+  }
+
   .skeleton {
     background: linear-gradient(
       90deg,
