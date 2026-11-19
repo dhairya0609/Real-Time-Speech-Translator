@@ -1,543 +1,170 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
-import axios from "axios";
-
-dotenv.config();
+import { WebSocketServer } from "ws";
+import config from "./lib/config.js";
+import log from "./lib/log.js";
+import { LiveSession } from "./lib/liveSession.js";
+import { translate } from "./lib/translator.js";
+import { geminiConfigured, geminiCoolingDown, geminiSummarize } from "./lib/gemini.js";
+import { clientIp, limiters, reserveAiCall } from "./lib/rateLimit.js";
+import { AUTO, isLanguageCode } from "./lib/languages.js";
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
 
-app.use(cors());
-app.use(express.json());
+if (config.trustProxy) app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use(cors(config.allowedOrigins.length ? { origin: config.allowedOrigins } : undefined));
+app.use(express.json({ limit: "64kb" }));
 
-const DG_ENDPOINT =
-  "wss://api.deepgram.com/v1/listen?punctuate=true&language=en&utterances=true&sample_rate=48000&channels=1";
-const DEEPGRAM_API_KEY =
-  process.env.DEEPGRAM_API_KEY || "your_deepgram_api_key_here";
-
-// Language code mapping for Deepgram (only actually supported languages)
-const DEEPGRAM_LANGUAGE_MAP = {
-  // Major languages that Deepgram definitely supports for speech recognition
-  'en': 'en',
-  'es': 'es',
-  'fr': 'fr',
-  'de': 'de',
-  'it': 'it',
-  'pt': 'pt',
-  'ru': 'ru',
-  'zh': 'zh',
-  'ja': 'ja',
-  'ko': 'ko',
-  'ar': 'ar',
-  'hi': 'hi',
-  'bn': 'bn',
-  'ur': 'ur',
-  'th': 'th',
-  'tr': 'tr',
-  'vi': 'vi',
-  'nl': 'nl',
-  'pl': 'pl',
-  'sv': 'sv',
-  'da': 'da',
-  'no': 'no',
-  'fi': 'fi',
-  'cs': 'cs',
-  'hu': 'hu',
-  'ro': 'ro',
-  'bg': 'bg',
-  'hr': 'hr',
-  'sk': 'sk',
-  'sl': 'sl',
-  'et': 'et',
-  'lv': 'lv',
-  'lt': 'lt',
-  'el': 'el',
-  'mt': 'mt',
-  'ga': 'ga',
-  'cy': 'cy',
-  'is': 'is',
-  'mk': 'mk',
-  'sq': 'sq',
-  'be': 'be',
-  'uk': 'uk',
-  'sr': 'sr',
-  'bs': 'bs',
-  'ca': 'ca',
-  'gl': 'gl',
-  'eu': 'eu',
-  'af': 'af',
-  'hy': 'hy',
-  'ka': 'ka',
-  'az': 'az',
-  'kk': 'kk',
-  'uz': 'uz',
-  'tg': 'tg',
-  'mn': 'mn',
-  'my': 'my',
-  'km': 'km',
-  'lo': 'lo',
-  'id': 'id',
-  'ms': 'ms',
-  'tl': 'tl',
-  'jw': 'jw',
-  'ne': 'ne',
-  'si': 'si',
-  'ta': 'ta',
-  'te': 'te',
-  'kn': 'kn',
-  'ml': 'ml',
-  // Regional variants (only for major languages)
-  'en-US': 'en-US',
-  'en-GB': 'en-GB',
-  'en-AU': 'en-AU',
-  'en-NZ': 'en-NZ',
-  'en-IN': 'en-IN',
-  'es-ES': 'es-ES',
-  'es-MX': 'es-MX',
-  'pt-BR': 'pt-BR',
-  'pt-PT': 'pt-PT',
-  'fr-FR': 'fr-FR',
-  'fr-CA': 'fr-CA',
-  'de-DE': 'de-DE',
-  'de-AT': 'de-AT',
-  'it-IT': 'it-IT',
-  'ru-RU': 'ru-RU',
-  'zh-CN': 'zh-CN',
-  'zh-TW': 'zh-TW',
-  'ja-JP': 'ja-JP',
-  'ko-KR': 'ko-KR',
-  'ar-SA': 'ar-SA',
-  'hi-IN': 'hi-IN',
-  'bn-IN': 'bn-IN',
-  'ur-PK': 'ur-PK',
-  'th-TH': 'th-TH',
-  'tr-TR': 'tr-TR',
-  'vi-VN': 'vi-VN',
-  'nl-NL': 'nl-NL',
-  'pl-PL': 'pl-PL',
-  'sv-SE': 'sv-SE',
-  'da-DK': 'da-DK',
-  'no-NO': 'no-NO',
-  'fi-FI': 'fi-FI',
-  'cs-CZ': 'cs-CZ',
-  'hu-HU': 'hu-HU',
-  'ro-RO': 'ro-RO',
-  'bg-BG': 'bg-BG',
-  'hr-HR': 'hr-HR',
-  'sk-SK': 'sk-SK',
-  'sl-SI': 'sl-SI',
-  'et-EE': 'et-EE',
-  'lv-LV': 'lv-LV',
-  'lt-LT': 'lt-LT',
-  'el-GR': 'el-GR',
-  'mt-MT': 'mt-MT',
-  'ga-IE': 'ga-IE',
-  'cy-GB': 'cy-GB',
-  'is-IS': 'is-IS',
-  'mk-MK': 'mk-MK',
-  'sq-AL': 'sq-AL',
-  'be-BY': 'be-BY',
-  'uk-UA': 'uk-UA',
-  'sr-RS': 'sr-RS',
-  'bs-BA': 'bs-BA',
-  'ca-ES': 'ca-ES',
-  'gl-ES': 'gl-ES',
-  'eu-ES': 'eu-ES',
-  'af-ZA': 'af-ZA',
-  'hy-AM': 'hy-AM',
-  'ka-GE': 'ka-GE',
-  'az-AZ': 'az-AZ',
-  'kk-KZ': 'kk-KZ',
-  'uz-UZ': 'uz-UZ',
-  'tg-TJ': 'tg-TJ',
-  'mn-MN': 'mn-MN',
-  'my-MM': 'my-MM',
-  'km-KH': 'km-KH',
-  'lo-LA': 'lo-LA',
-  'id-ID': 'id-ID',
-  'ms-MY': 'ms-MY',
-  'tl-PH': 'tl-PH',
-  'jw-ID': 'jw-ID',
-  'ne-NP': 'ne-NP',
-  'si-LK': 'si-LK',
-  'ta-IN': 'ta-IN',
-  'te-IN': 'te-IN',
-  'kn-IN': 'kn-IN',
-  'ml-IN': 'ml-IN',
-};
-
-// Function to get Deepgram language code
-function getDeepgramLanguageCode(langCode) {
-  // Check if the language is supported by Deepgram
-  if (DEEPGRAM_LANGUAGE_MAP[langCode]) {
-    return DEEPGRAM_LANGUAGE_MAP[langCode];
-  }
-  
-  // If not supported, default to English and log a warning
-  console.warn(`⚠️ Language code '${langCode}' not supported by Deepgram, defaulting to English`);
-  console.warn(`⚠️ Supported languages: ${Object.keys(DEEPGRAM_LANGUAGE_MAP).join(', ')}`);
-  return 'en';
+function bad(res, message) {
+  return res.status(400).json({ error: "bad_request", message });
 }
 
-// Translation cache to avoid re-translating the same text
-const translationCache = new Map();
+function cleanText(value, max) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
 
-// Translation function using Google Translate with fallback
-async function translateText(text, sourceLang, targetLang) {
+function cleanTurns(value, maxTurns, maxChars) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(-maxTurns)
+    .map((t) => ({ original: cleanText(t?.original, maxChars), translated: cleanText(t?.translated, maxChars) }))
+    .filter((t) => t.original);
+}
+
+const route = (handler) => (req, res) =>
+  handler(req, res).catch((err) => {
+    log.error("route_failed", { path: req.path, error: err.message });
+    if (!res.headersSent) res.status(500).json({ error: "server_error", message: "Something went wrong. Try again." });
+  });
+
+function validLanguages(sourceLang, targetLang) {
+  return isLanguageCode(sourceLang) && isLanguageCode(targetLang) && targetLang !== AUTO;
+}
+
+app.get("/health", (_req, res) => res.json({ ok: true }));
+
+app.get("/api/status", (_req, res) => {
+  res.json({
+    stt: Boolean(config.deepgramKey),
+    ai: geminiConfigured(),
+    aiAvailable: geminiConfigured() && !geminiCoolingDown() && limiters.globalDay.check().ok,
+    model: geminiConfigured() ? config.geminiModel : null,
+    maxTextChars: config.maxTextChars,
+    maxSessionMinutes: config.maxSessionMinutes,
+  });
+});
+
+app.post("/api/translate", route(async (req, res) => {
+  const ip = clientIp(req);
+  const gate = limiters.httpTranslate.check(ip);
+  if (!gate.ok) {
+    res.set("Retry-After", String(Math.ceil(gate.retryAfterMs / 1000)));
+    return res.status(429).json({
+      error: "rate_limited",
+      message: "You're translating very quickly. Wait a few seconds and try again.",
+      retryAfterMs: gate.retryAfterMs,
+    });
+  }
+  limiters.httpTranslate.hit(ip);
+
+  const { sourceLang = AUTO, targetLang, tone } = req.body || {};
+  const raw = typeof req.body?.text === "string" ? req.body.text : "";
+  if (raw.length > config.maxTextChars) return bad(res, `Keep it under ${config.maxTextChars} characters.`);
+  const text = cleanText(raw, config.maxTextChars);
+  if (!text) return bad(res, "Nothing to translate.");
+  if (!validLanguages(sourceLang, targetLang)) return bad(res, "Unknown language.");
+
+  const r = await translate({
+    text,
+    sourceLang,
+    targetLang,
+    tone: tone === "formal" ? "formal" : "casual",
+    context: cleanTurns(req.body.context, config.contextTurns, 400),
+    ip,
+  });
+  return res.json({ text, ...r });
+}));
+
+app.post("/api/summarize", route(async (req, res) => {
+  const { sourceLang = AUTO, targetLang } = req.body || {};
+  if (!validLanguages(sourceLang, targetLang)) return bad(res, "Unknown language.");
+  const utterances = cleanTurns(req.body?.utterances, 200, config.maxTextChars);
+  if (!utterances.length) return bad(res, "There's nothing to summarize yet.");
+
+  if (!geminiConfigured()) {
+    return res.status(503).json({
+      error: "ai_unconfigured",
+      message: "Summaries need the AI model, which isn't set up on this server yet.",
+    });
+  }
+  const slot = reserveAiCall("summary", clientIp(req));
+  if (!slot.ok) {
+    res.set("Retry-After", String(Math.ceil(slot.retryAfterMs / 1000)));
+    return res.status(429).json({
+      error: slot.reason,
+      message:
+        slot.reason === "ai_daily_cap"
+          ? "Today's free AI quota is used up. Try again tomorrow."
+          : "You've made a lot of summaries recently. Try again in a little while.",
+      retryAfterMs: slot.retryAfterMs,
+    });
+  }
+
   try {
-    if (!text || text.trim() === "") {
-      console.log("🌐 Empty text, skipping translation");
-      return "";
-    }
-    
-    // Check cache first
-    const cacheKey = `${text}:${sourceLang}:${targetLang}`;
-    if (translationCache.has(cacheKey)) {
-      console.log(`🌐 Cache hit for: "${text}"`);
-      return translationCache.get(cacheKey);
-    }
-    
-    console.log(`🌐 Attempting to translate: "${text}" from ${sourceLang} to ${targetLang}`);
-    
-    // Try Google Translate first
-    try {
-      const response = await axios.get(`https://translate.googleapis.com/translate_a/single`, {
-        params: {
-          client: 'gtx',
-          sl: sourceLang,
-          tl: targetLang,
-          dt: 't',
-          q: text
-        },
-        timeout: 5000 // 5 second timeout
-      });
-      
-      // Extract translated text from response
-      const translatedText = response.data[0].map(item => item[0]).join('');
-      console.log(`🌐 Translation successful (Google): "${text}" → "${translatedText}"`);
-      
-      // Cache the result
-      translationCache.set(cacheKey, translatedText);
-      return translatedText;
-    } catch (googleError) {
-      console.log("❌ Google Translate failed, trying LibreTranslate...");
-      
-      // Fallback to LibreTranslate
-      const libreResponse = await axios.post('https://libretranslate.de/translate', {
-        q: text,
-        source: sourceLang,
-        target: targetLang
-      }, {
-        timeout: 5000 // 5 second timeout
-      });
-      
-      const translatedText = libreResponse.data.translatedText;
-      console.log(`🌐 Translation successful (LibreTranslate): "${text}" → "${translatedText}"`);
-      
-      // Cache the result
-      translationCache.set(cacheKey, translatedText);
-      return translatedText;
-    }
-  } catch (error) {
-    console.error("❌ All translation services failed:", error.message);
-    console.error("❌ Translation error details:", error.response?.data || error);
-    return text; // Return original text if translation fails
+    const summary = await geminiSummarize({ utterances, sourceLang, targetLang });
+    return res.json({ summary, model: config.geminiModel });
+  } catch (err) {
+    const limited = err.kind === "rate_limited" || (err.kind === "cooling_down" && geminiCoolingDown() === "rate_limited");
+    return res.status(limited ? 429 : 502).json({
+      error: limited ? "ai_rate_limited" : "ai_error",
+      message: limited
+        ? "The AI model is busy right now. Try again in a minute."
+        : err.kind === "timeout"
+          ? "The AI model took too long. Try again."
+          : "The AI model couldn't summarize this. Try again.",
+    });
   }
-}
+}));
 
-wss.on("connection", (ws) => {
-  console.log("✅ Client connected to transcription server");
-  
-  // Add connection state tracking
-  ws.deepgramConnected = false;
-  ws.sourceLang = 'en'; // Default source language
-  ws.targetLang = 'es'; // Default target language
+const wss = new WebSocketServer({ server, maxPayload: 1024 * 1024 });
+const socketsPerIp = new Map();
 
-  ws.on("message", (message) => {
-    try {
-      console.log("📨 Raw message received:", typeof message, message.length);
-      console.log("📨 Message is Buffer:", Buffer.isBuffer(message));
-      
-      // Try to parse as JSON first
-      let isJsonMessage = false;
-      let data = null;
-      
-      try {
-        const messageStr = message.toString();
-        console.log("📨 Message toString:", messageStr.substring(0, 100));
-        
-        // Check if it looks like JSON
-        if (messageStr.trim().startsWith('{')) {
-          data = JSON.parse(messageStr);
-          isJsonMessage = true;
-          console.log("📩 Parsed as JSON message:", data);
-        }
-      } catch (error) {
-        console.log("📨 Message is not JSON, treating as binary");
-      }
-      
-      // Handle JSON control messages
-      if (isJsonMessage && data) {
-        if (data.type === "start_transcription") {
-          console.log("🚀 Starting transcription process...");
-          
-          // Store source and target language from client
-          ws.sourceLang = data.sourceLang || 'en';
-          ws.targetLang = data.targetLang || 'es';
-          console.log("🌐 Source language set to:", ws.sourceLang);
-          console.log("🌐 Target language set to:", ws.targetLang);
-          
-          // Get Deepgram-compatible language code
-          const deepgramSourceLang = getDeepgramLanguageCode(ws.sourceLang);
-          console.log("🌐 Deepgram source language:", deepgramSourceLang);
-          
-          // Notify frontend if language was changed
-          if (deepgramSourceLang !== ws.sourceLang) {
-            ws.send(JSON.stringify({
-              type: "language_not_supported",
-              requestedLang: ws.sourceLang,
-              fallbackLang: deepgramSourceLang,
-              message: `Language '${ws.sourceLang}' not supported by Deepgram, using '${deepgramSourceLang}' instead`
-            }));
-          }
-          
-          // Create Deepgram endpoint with dynamic source language
-          const DG_ENDPOINT = `wss://api.deepgram.com/v1/listen?punctuate=true&language=${deepgramSourceLang}&utterances=true&sample_rate=48000&channels=1`;
-          
-          // 🌐 Connect to Deepgram WebSocket API
-          const deepgramSocket = new WebSocket(DG_ENDPOINT, {
-            headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
-          });
+wss.on("connection", (ws, req) => {
+  const origin = req.headers.origin;
+  if (config.allowedOrigins.length && origin && !config.allowedOrigins.includes(origin)) {
+    ws.close(1008, "Origin not allowed");
+    return;
+  }
 
-          console.log("🔌 Attempting to connect to Deepgram...");
-
-          deepgramSocket.on("open", () => {
-            console.log("✅ Deepgram WebSocket connected");
-            ws.deepgramConnected = true;
-            ws.send(JSON.stringify({ type: "deepgram_connected" }));
-          });
-
-          deepgramSocket.on("message", (dgMessage) => {
-            try {
-              const dgData = JSON.parse(dgMessage.toString());
-              console.log("📝 Deepgram message:", dgMessage.toString());
-
-              if (dgData.channel?.alternatives?.length > 0) {
-                const transcript = dgData.channel.alternatives[0].transcript;
-
-                if (transcript) {
-                  console.log("🧠 Parsed transcript:", transcript);
-
-                  // Send original transcript
-                  ws.send(
-                    JSON.stringify({
-                      type: "transcript",
-                      transcript: transcript.trim(),
-                      isFinal: !!dgData.is_final,
-                    })
-                  );
-
-                  // If it's a final transcript, also translate it
-                  if (dgData.is_final) {
-                    console.log("📤 Sent final transcript:", transcript);
-                    
-                    // Get source and target language from client
-                    const sourceLang = ws.sourceLang || 'en';
-                    const targetLang = ws.targetLang || 'es';
-                    console.log("🌐 Will translate from", sourceLang, "to", targetLang);
-                    
-                    // Always translate unless source and target are the same
-                    if (sourceLang !== targetLang) {
-                      // Translate the transcript
-                      translateText(transcript.trim(), sourceLang, targetLang).then(translatedText => {
-                        console.log("🌐 Sending translation to frontend:", translatedText);
-                        try {
-                          ws.send(
-                            JSON.stringify({
-                              type: "translation",
-                              original: transcript.trim(),
-                              translated: translatedText,
-                              sourceLang: sourceLang,
-                              targetLang: targetLang,
-                            })
-                          );
-                        } catch (sendError) {
-                          console.error("❌ Failed to send translation to client:", sendError);
-                        }
-                      }).catch(error => {
-                        console.error("❌ Translation failed:", error);
-                        // Send original text as fallback
-                        try {
-                          ws.send(
-                            JSON.stringify({
-                              type: "translation",
-                              original: transcript.trim(),
-                              translated: transcript.trim(),
-                              sourceLang: sourceLang,
-                              targetLang: targetLang,
-                            })
-                          );
-                        } catch (sendError) {
-                          console.error("❌ Failed to send fallback translation:", sendError);
-                        }
-                      });
-                    } else {
-                      // If source and target are the same, just send the original as translation
-                      try {
-                        ws.send(
-                          JSON.stringify({
-                            type: "translation",
-                            original: transcript.trim(),
-                            translated: transcript.trim(),
-                            sourceLang: sourceLang,
-                            targetLang: targetLang,
-                          })
-                        );
-                      } catch (sendError) {
-                        console.error("❌ Failed to send same-language translation:", sendError);
-                      }
-                    }
-                  }
-                }
-              }
-            } catch (dgError) {
-              console.error("❌ Error processing Deepgram message:", dgError);
-            }
-          });
-
-          deepgramSocket.on("error", (err) => {
-            console.error("❌ Deepgram WebSocket Error:", err);
-            console.error("❌ Error details:", err.message);
-            console.error("❌ Error code:", err.code);
-            ws.deepgramConnected = false;
-            
-            // Don't crash the server, just send error to client
-            try {
-              ws.send(
-                JSON.stringify({
-                  type: "error",
-                  message: "Deepgram connection failed: " + err.message,
-                })
-              );
-            } catch (sendError) {
-              console.error("❌ Failed to send error to client:", sendError);
-            }
-          });
-
-          const keepAliveInterval = setInterval(() => {
-            if (deepgramSocket.readyState === WebSocket.OPEN) {
-              deepgramSocket.send(JSON.stringify({ type: "KeepAlive" }));
-              console.log("🔄 KeepAlive sent to Deepgram");
-            }
-          }, 10000);
-
-          deepgramSocket.on("close", () => {
-            clearInterval(keepAliveInterval);
-            ws.deepgramConnected = false;
-            console.log("🔌 Deepgram Socket Closed and keep-alive stopped");
-          });
-
-          // Save reference to Deepgram socket on client socket
-          ws.deepgramSocket = deepgramSocket;
-        }
-
-        if (data.type === "test") {
-          console.log("🧪 Test message received:", data.data);
-          ws.send(JSON.stringify({ type: "test_response", data: "test_acknowledged" }));
-        }
-
-        if (data.type === "update_target_language") {
-          console.log("🌐 Updating target language to:", data.targetLang);
-          ws.targetLang = data.targetLang;
-          ws.send(JSON.stringify({ 
-            type: "target_language_updated", 
-            targetLang: data.targetLang 
-          }));
-        }
-
-        if (data.type === "update_source_language") {
-          console.log("🌐 Updating source language to:", data.sourceLang);
-          ws.sourceLang = data.sourceLang;
-          ws.send(JSON.stringify({ 
-            type: "source_language_updated", 
-            sourceLang: data.sourceLang 
-          }));
-        }
-
-        if (data.type === "stop_transcription") {
-          console.log("🛑 Stopping transcription...");
-          if (ws.deepgramSocket) {
-            ws.deepgramSocket.close();
-            ws.deepgramSocket = null;
-            ws.deepgramConnected = false;
-          }
-        }
-        
-        return; // Exit early for JSON messages
-      }
-
-      // Handle binary audio chunks
-      if (Buffer.isBuffer(message)) {
-        console.log("📥 Received binary audio chunk:", message.length);
-
-        if (
-          ws.deepgramSocket &&
-          ws.deepgramSocket.readyState === WebSocket.OPEN &&
-          ws.deepgramConnected
-        ) {
-          console.log("🔊 Forwarding audio to Deepgram");
-          ws.deepgramSocket.send(message);
-        } else {
-          console.warn("⚠️ Deepgram socket not ready. Connection state:", ws.deepgramConnected);
-        }
-      }
-    } catch (error) {
-      console.error("❌ Error processing WebSocket message:", error);
-      try {
-        ws.send(JSON.stringify({
-          type: "error",
-          message: "Server error processing message: " + error.message,
-        }));
-      } catch (sendError) {
-        console.error("❌ Failed to send error to client:", sendError);
-      }
-    }
-  });
-
+  const ip = clientIp(req);
+  const open = socketsPerIp.get(ip) || 0;
+  if (open >= config.maxSocketsPerIp) {
+    ws.send(JSON.stringify({
+      type: "error",
+      code: "too_many_sessions",
+      message: "Too many live sessions from your network. Close other tabs and try again.",
+    }));
+    ws.close(1013, "Too many sessions");
+    return;
+  }
+  socketsPerIp.set(ip, open + 1);
   ws.on("close", () => {
-    console.log("🔌 Client disconnected");
-    if (ws.deepgramSocket) {
-      ws.deepgramSocket.close();
-      ws.deepgramSocket = null;
-      ws.deepgramConnected = false;
-    }
+    const n = (socketsPerIp.get(ip) || 1) - 1;
+    if (n <= 0) socketsPerIp.delete(ip);
+    else socketsPerIp.set(ip, n);
   });
 
-  ws.on("error", (error) => {
-    console.error("❌ WebSocket error:", error);
-  });
+  new LiveSession(ws, ip);
 });
 
-// Global error handler for WebSocket server
-wss.on("error", (error) => {
-  console.error("❌ WebSocket server error:", error);
+wss.on("error", (err) => log.error("wss_error", { error: err.message }));
+
+server.listen(config.port, () => {
+  log.info("listening", { port: config.port, stt: Boolean(config.deepgramKey), ai: geminiConfigured(), model: config.geminiModel });
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () =>
-  console.log(`✅ Backend running on port ${PORT}`)
-);
-
-// Global error handlers to prevent crashes
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  console.error('❌ Stack trace:', error.stack);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-});
+process.on("unhandledRejection", (reason) => log.error("unhandled_rejection", { error: String(reason?.message || reason) }));
+process.on("uncaughtException", (err) => log.error("uncaught_exception", { error: err.message, stack: err.stack }));

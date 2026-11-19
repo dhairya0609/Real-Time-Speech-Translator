@@ -3,15 +3,20 @@
     "version": "1.0.0",
     "main": "server.js",
     "type": "module",
+    "engines": {
+        "node": ">=22"
+    },
     "scripts": {
-        "start": "node server.js"
+        "start": "node server.js",
+        "smoke:ai": "node scripts/ai-smoke.js"
     },
     "dependencies": {
+        "@google/genai": "^3.6.1",
         "axios": "^1.11.0",
         "cors": "^2.8.5",
         "dotenv": "^16.3.1",
         "express": "^4.18.2",
-        "multer": "^1.4.5-lts.1",
         "ws": "^8.18.3"
-    }
+    },
+    "description": "WebSocket relay to Deepgram live speech-to-text plus Gemini context-aware translation"
 }
