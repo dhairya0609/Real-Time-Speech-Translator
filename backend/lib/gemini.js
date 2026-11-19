@@ -125,7 +125,9 @@ async function callOnce(c, { system, prompt, schema }, minimal, deadline, model)
       reject(new GeminiError("timeout", "Gemini timed out"));
     }, remaining);
   });
-  const base = { abortSignal: controller.signal, httpOptions: { timeout: remaining } };
+  // No httpOptions.timeout: the SDK sends it to Google as a server deadline, which must be >= 10s,
+  // so a 5s translation budget was rejected with 400. The timer above enforces the deadline instead.
+  const base = { abortSignal: controller.signal, httpOptions: { retryOptions: { attempts: 1 } } };
   const request = c.models.generateContent({
     model,
     contents: prompt,

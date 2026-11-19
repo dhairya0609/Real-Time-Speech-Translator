@@ -151,6 +151,8 @@ for (const [behaviour, expectGemini] of [
   );
   if (behaviour === "ok") {
     report(calls[0]?.contents.includes("Hi Marie. => Salut Marie."), "translate: previous turns are sent as context");
+    const t = calls[0]?.config?.httpOptions?.timeout;
+    report(t === undefined || t >= 10_000, "translate: no server deadline under Google's 10s minimum", String(t));
   }
   if (behaviour === "503-primary") {
     const order = calls.map((c) => c.model).join(">");
