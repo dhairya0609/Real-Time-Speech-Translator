@@ -1,0 +1,23 @@
+import React from "react";
+
+export const LogoMark: React.FC<{ className?: string }> = ({ className = "h-7 w-7" }) => (
+  <svg viewBox="0 0 32 32" className={`shrink-0 ${className}`} aria-hidden="true">
+    <rect width="32" height="32" rx="9" fill="rgb(var(--accent))" />
+    <g fill="rgb(var(--accent-fg))">
+      <rect x="6.5" y="13" width="2.4" height="6" rx="1.2" />
+      <rect x="10.4" y="9.5" width="2.4" height="13" rx="1.2" />
+      <rect x="14.3" y="12" width="2.4" height="8" rx="1.2" />
+      <rect x="19" y="11.6" width="7" height="2.4" rx="1.2" />
+      <rect x="19" y="17.2" width="4.6" height="2.4" rx="1.2" opacity="0.7" />
+    </g>
+  </svg>
+);
+
+const Logo: React.FC = () => (
+  <span className="flex min-w-0 items-center gap-2.5">
+    <LogoMark />
+    <span className="truncate text-[15px] font-semibold tracking-[-0.015em]">Live Translator</span>
+  </span>
+);
+
+export default Logo;

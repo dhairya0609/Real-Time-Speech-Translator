@@ -1,15 +1,14 @@
 {
-  "short_name": "Live Translator",
-  "name": "Live Translator - real-time AI speech translation",
+  "short_name": "Translator",
+  "name": "Live Translator",
+  "description": "Real-time voice and text translation for conversations.",
   "icons": [
-    {
-      "src": "favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
-    }
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#09090b",
+  "theme_color": "#fafafa",
   "background_color": "#fafafa"
 }
