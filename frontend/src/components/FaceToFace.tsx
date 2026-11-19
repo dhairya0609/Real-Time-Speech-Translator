@@ -55,7 +55,7 @@ const Half: React.FC<Props & { side: Side }> = ({ side, utterances, interim, mic
       className={`flex min-h-0 flex-1 flex-col ${side === "b" ? "rotate-180 border-b border-line bg-raised/40" : "bg-surface"}`}
       aria-label={`${languageName(lang)} side`}
     >
-      <header className="flex items-center gap-2 px-4 pt-3">
+      <header className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pt-3">
         <span className="rounded-full bg-surface px-3 py-1 text-sm font-semibold shadow-card ring-1 ring-line" lang={lang}>
           {endonym(lang)}
         </span>
@@ -66,7 +66,7 @@ const Half: React.FC<Props & { side: Side }> = ({ side, utterances, interim, mic
         )}
       </header>
 
-      <div ref={listRef} className="scroll-area flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-3">
+      <div ref={listRef} className="scroll-area mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-2 overflow-y-auto px-4 py-3">
         {utterances.length === 0 && !active && (
           <p className="m-auto text-center text-sm text-muted">
             <MicrophoneIcon className="mx-auto mb-2 h-6 w-6 text-subtle" />
@@ -113,7 +113,7 @@ const Half: React.FC<Props & { side: Side }> = ({ side, utterances, interim, mic
         )}
       </div>
 
-      <div className="flex items-center gap-3 px-4 pb-4 pt-1">
+      <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 pb-4 pt-1">
         <form onSubmit={send} className="flex min-w-0 flex-1 items-center gap-1 rounded-full border border-line bg-surface py-1 pl-4 pr-1 shadow-card focus-within:border-accent/50">
           <input
             value={text}
