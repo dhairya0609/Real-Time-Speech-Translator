@@ -6,16 +6,17 @@ Speak or type in one language and read a live, context-aware translation in anot
 
 ## Features
 
-- **Live voice translation.** Mic audio streams over a WebSocket to Deepgram; each utterance becomes a card with the original and its translation. A live level meter (Web Audio `AnalyserNode`) shows the mic is picking you up.
-- **Context-aware AI translation.** Gemini sees the last few turns, so "she", "it" and the register of the conversation are translated consistently. A casual / formal toggle sets the tone.
-- **Type to translate.** No mic, or permission denied? Type instead; it goes through the same AI path. Sample phrases let first-time visitors try it in one click.
-- **Summarize.** One click produces a short summary and action items in both languages.
-- **Export.** Download the transcript (plus the summary, if any) as Markdown or plain text.
-- **Conversation mode.** Swapping languages hands the conversation to the other person; their lines align to the other side, like a chat.
-- **Read aloud and copy** on every card, light and dark themes, and keyboard shortcuts (Space to talk, `/` to type, `S` to swap, `?` for the list).
-- **Friendly first run.** Sample phrases, a short explanation before the browser's microphone prompt, a progress indicator while the free-tier backend wakes up, and an About sheet with the privacy note (audio is never stored; the conversation stays in the browser tab).
-- **Auto-detect.** Typed text is always auto-detected. Spoken auto-detect uses Deepgram nova-3 multilingual and is opt-in (see `DEEPGRAM_MODE`).
-- **Shows its work, quietly.** A small icon on each card marks AI versus standard translation; hovering it names the provider.
+- **Live voice translation.** Mic audio streams over a WebSocket to Deepgram; each finished sentence becomes a card with the original and the translation, with a live level meter while you speak.
+- **Context-aware AI translation.** Gemini sees the last few turns, so pronouns, names and register carry over; a casual / formal toggle sets the tone.
+- **Face to face.** Put the phone between two people: the screen splits, the top half turns to face the other person, and each side has its own mic and text field.
+- **Conversation and Text views.** The timeline for back-and-forth talk, and a classic two-panel translator that translates as you pause typing.
+- **Other ways to say it.** Tap any translation for alternatives (more formal, more casual, shorter, closer to the original) and pick one to use.
+- **Pronunciation.** Non-Latin scripts get a Latin-letter line (Hindi in everyday Hinglish spelling, pinyin, Hepburn). Gemini supplies it, Google's romanisation is the fallback, and Hindi is romanised on-device when neither is available.
+- **Saved phrases and history.** Star lines to keep them; past conversations are kept in this browser only, with an off switch and delete-all.
+- **Per line:** listen with the most natural voice the browser offers, copy, share, or show full screen in large type (with a flip for the person opposite).
+- **Summaries and export.** A short summary with action items in both languages; download as Markdown or text.
+- **Graceful when things go wrong.** Lines typed offline queue and translate on reconnect, brief throttling retries quietly, cold starts show progress, and every failure has a Retry.
+- **Auto-detect.** Typed text is always auto-detected and labelled; spoken auto-detect uses Deepgram nova-3 multilingual and is opt-in (see `DEEPGRAM_MODE`).
 
 ## How translation and fallback work
 
@@ -35,9 +36,11 @@ Summaries need Gemini; without it the panel says so and export still works.
 | `DEEPGRAM_API_KEY` | none | Live speech. Without it the mic is disabled and the app is type-only. |
 | `GEMINI_API_KEY` | none | Gemini translation and summaries ([get a free key](https://aistudio.google.com/apikey)). Without it, classic translation is used. |
 | `GEMINI_MODEL` | `gemini-3.8-flash` | Any Gemini model id. |
+| `GEMINI_FALLBACK_MODELS` | `gemini-3.6-flash,gemini-3.5-flash-lite` | Tried in order when the main model is overloaded, rate-limited or unavailable. |
 | `GEMINI_THINKING_LEVEL` | `LOW` | `LOW`, `MEDIUM`, `HIGH`, or `OFF` to send no thinking config. |
 | `GEMINI_TIMEOUT_MS` | `5000` | Deadline per translation before falling back. |
 | `GEMINI_SUMMARY_TIMEOUT_MS` | `20000` | Deadline per summary. |
+| `GEMINI_ALTERNATIVES_TIMEOUT_MS` | `9000` | Deadline per alternatives request. |
 | `TRANSLATION_CONTEXT_TURNS` | `3` | Earlier turns sent as context. |
 | `DEEPGRAM_MODE` | `standard` | `standard` sends the original Deepgram request. `enhanced` opts into nova-3/nova-2, interim text, sentence grouping and spoken auto-detect (`language=multi`). |
 | `AI_TRANSLATE_PER_MIN` / `AI_TRANSLATE_PER_DAY` | `20` / `300` | Gemini translations per client IP. |
@@ -62,6 +65,7 @@ Keys are only read on the server; they are never sent to the browser or written 
 - `GET /health`: whether the Gemini and Deepgram keys are configured, the model id, Deepgram mode, and the last Gemini success/failure. Calls neither service.
 - `GET /api/status`: what the UI needs (voice available, AI on, limits).
 - `POST /api/translate`: `{ text, sourceLang, targetLang, tone, context }`.
+- `POST /api/alternatives`: `{ text, translation, sourceLang, targetLang, tone, context }` (Gemini only; counts toward the translation limits).
 - `POST /api/summarize`: `{ utterances, sourceLang, targetLang }`.
 - WebSocket: `start` / `settings` / `stop` messages plus binary audio; replies with `ready`, `transcript` (interim), `utterance`, `translation`, `notice`, `error` and `stopped`.
 
