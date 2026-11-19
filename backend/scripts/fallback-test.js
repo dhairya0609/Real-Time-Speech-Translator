@@ -71,6 +71,9 @@ function stub(behaviour) {
             return { text: good };
           case "503":
             throw err(503, "The model is overloaded. Please try again later.");
+          case "hang-primary":
+            if (req.model === "primary-model") return new Promise(() => {});
+            return { text: good };
           case "hang":
             return new Promise(() => {});
           case "empty":
@@ -120,6 +123,7 @@ for (const [behaviour, expectGemini] of [
   ["fenced", true],
   ["400-then-minimal", true],
   ["503-primary", true],
+  ["hang-primary", true],
   ["503", false],
   ["throw", false],
   ["400", false],
@@ -146,6 +150,12 @@ for (const [behaviour, expectGemini] of [
   if (behaviour === "503-primary") {
     const order = calls.map((c) => c.model).join(">");
     report(order === "primary-model>fallback-model", "translate: overloaded primary falls through to the next model", order);
+    await post("/api/translate", { ...sample, text: "next line after 503" });
+    const next = calls.slice(2).map((c) => c.model).join(">");
+    report(next === "fallback-model", "translate: a model that just failed is skipped on the next line", next);
+  }
+  if (behaviour === "hang-primary") {
+    report(r.ms < 1000, "translate: a hanging primary still leaves time for the fallback", `${r.ms}ms`);
   }
   if (["401", "404", "429"].includes(behaviour)) {
     const again = await post("/api/translate", { ...sample, text: `second ${behaviour}` });

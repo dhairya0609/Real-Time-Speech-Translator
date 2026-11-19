@@ -35,6 +35,15 @@ const health = { lastOkAt: null, lastError: null, lastModel: null };
 
 const modelChain = () => [config.geminiModel, ...config.geminiFallbackModels.filter((m) => m !== config.geminiModel)];
 
+// Models that just failed are skipped for a few minutes so the next line goes straight to one that works.
+const MODEL_SKIP_MS = 3 * 60_000;
+const MIN_ATTEMPT_MS = 1500;
+const skipUntil = new Map();
+const liveChain = () => {
+  const up = modelChain().filter((m) => (skipUntil.get(m) || 0) <= Date.now());
+  return up.length ? up : modelChain();
+};
+
 export function geminiCoolingDown() {
   return Date.now() < coolUntil ? coolReason : null;
 }
@@ -60,6 +69,7 @@ export function setGeminiClientForTests(fake) {
   health.lastOkAt = null;
   health.lastError = null;
   health.lastModel = null;
+  skipUntil.clear();
 }
 
 const COOLDOWN = { auth: 10 * 60_000, model: 10 * 60_000 };
@@ -145,32 +155,40 @@ async function generateJson({ system, prompt, schema, timeoutMs, kind }) {
   const started = Date.now();
   const deadline = started + timeoutMs;
   const req = { system, prompt, schema };
-  const attempt = async (model) => {
+  const minAttempt = Math.min(MIN_ATTEMPT_MS, Math.floor(timeoutMs / 3));
+  const attempt = async (model, until) => {
     try {
-      return await callOnce(c, req, minimalConfig, deadline, model);
+      return await callOnce(c, req, minimalConfig, until, model);
     } catch (err) {
       const e = classify(err);
       if (e.kind !== "invalid_request" || minimalConfig) throw e;
       minimalConfig = true;
       log.warn("gemini_minimal_config", { model, error: e.message });
-      return callOnce(c, req, true, deadline, model);
+      return callOnce(c, req, true, until, model);
     }
   };
 
-  const chain = modelChain();
+  const chain = liveChain();
   try {
     let text;
     for (let i = 0; ; i++) {
+      const model = chain[i];
+      const last = i === chain.length - 1;
+      const remaining = deadline - Date.now();
+      // Leave time for the next model if this one hangs.
+      const budget = last ? remaining : Math.min(remaining, Math.max(minAttempt, Math.floor(remaining * 0.45)));
       try {
-        text = await attempt(chain[i]);
-        health.lastModel = chain[i];
+        text = await attempt(model, Date.now() + budget);
+        health.lastModel = model;
+        skipUntil.delete(model);
         break;
       } catch (err) {
         const e = classify(err);
-        // Another model may be up when this one is overloaded, throttled or not served on this key.
-        const retryable = e.status === 429 || e.status === 404 || (e.status >= 500 && e.status < 600);
-        if (!retryable || i === chain.length - 1 || Date.now() >= deadline) throw e;
-        log.warn("gemini_model_unavailable", { kind, model: chain[i], next: chain[i + 1], status: e.status });
+        // Another model may be up when this one is overloaded, throttled, slow or not served on this key.
+        const retryable = e.kind === "timeout" || e.status === 429 || e.status === 404 || (e.status >= 500 && e.status < 600);
+        if (retryable) skipUntil.set(model, Date.now() + MODEL_SKIP_MS);
+        if (!retryable || last || deadline - Date.now() < minAttempt / 2) throw e;
+        log.warn("gemini_model_unavailable", { kind, model, next: chain[i + 1], reason: e.kind, status: e.status });
       }
     }
     const value = parseJsonLoose(text);
