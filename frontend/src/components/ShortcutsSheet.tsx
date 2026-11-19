@@ -4,6 +4,7 @@ import Sheet from "./Sheet";
 const SHORTCUTS: [string[], string][] = [
   [["Space"], "Start or stop listening"],
   [["/"], "Type a message"],
+  [["Ctrl", "Enter"], "Translate now (Text view)"],
   [["Enter"], "Translate typed text"],
   [["Shift", "Enter"], "New line"],
   [["S"], "Swap languages"],

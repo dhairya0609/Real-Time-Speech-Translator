@@ -1,137 +1,203 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ArrowDownTrayIcon,
   ChatBubbleBottomCenterTextIcon,
+  ClockIcon,
   CommandLineIcon,
   DocumentTextIcon,
   EllipsisHorizontalIcon,
   InformationCircleIcon,
+  LanguageIcon,
   MoonIcon,
+  PencilSquareIcon,
+  StarIcon,
   SunIcon,
-  TrashIcon,
 } from "@heroicons/react/20/solid";
-import { SparklesIcon } from "@heroicons/react/16/solid";
-import Logo from "./Logo";
+import { ChatBubbleLeftRightIcon, DocumentTextIcon as DocOutline, SparklesIcon } from "@heroicons/react/16/solid";
+import Logo, { LogoMark } from "./Logo";
+import Popover from "./Popover";
+import { FaceToFaceIcon } from "./icons";
 import type { Tone } from "../types";
 
-type MenuProps = {
+export type View = "conversation" | "text";
+
+type Props = {
+  view: View;
+  onView: (v: View) => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
   hasContent: boolean;
+  savedCount: number;
   tone: Tone;
   onTone: (t: Tone) => void;
+  showRoman: boolean;
+  onShowRoman: (on: boolean) => void;
+  onSummarize: () => void;
   onExport: (format: "md" | "txt") => void;
-  onClear: () => void;
+  onNew: () => void;
+  onSaved: () => void;
+  onHistory: () => void;
+  onFaceToFace: () => void;
   onShortcuts: () => void;
   onAbout: () => void;
 };
 
-type Props = MenuProps & {
-  theme: "light" | "dark";
-  onToggleTheme: () => void;
-  onSummarize: () => void;
-};
+const Toggle: React.FC<{ on: boolean }> = ({ on }) => (
+  <span aria-hidden="true" className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-accent" : "bg-line"}`}>
+    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+  </span>
+);
 
-const MoreMenu: React.FC<MenuProps> = ({ hasContent, tone, onTone, onExport, onClear, onShortcuts, onAbout }) => {
+export const ViewSwitch: React.FC<{ view: View; onView: (v: View) => void }> = ({ view, onView }) => (
+  <div role="tablist" aria-label="Mode" className="flex h-9 items-center rounded-full border border-line bg-surface p-0.5 shadow-card">
+    {(
+      [
+        ["conversation", "Conversation", ChatBubbleLeftRightIcon],
+        ["text", "Text", DocOutline],
+      ] as const
+    ).map(([v, label, Icon]) => (
+      <button
+        key={v}
+        role="tab"
+        type="button"
+        aria-selected={view === v}
+        onClick={() => onView(v)}
+        className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors ${
+          view === v ? "bg-raised text-fg shadow-card ring-1 ring-line" : "text-muted hover:text-fg"
+        }`}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </button>
+    ))}
+  </div>
+);
+
+const Header: React.FC<Props> = (p) => {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
+  const moreRef = useRef<HTMLButtonElement>(null);
   const run = (fn: () => void) => () => {
     setOpen(false);
     fn();
   };
+  const conversation = p.view === "conversation";
 
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        className="icon-btn"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="More options"
-        title="More options"
-      >
-        <EllipsisHorizontalIcon className="h-5 w-5" />
-      </button>
-      {open && (
-        <div role="menu" className="absolute right-0 top-11 z-40 w-64 origin-top-right animate-pop rounded-xl border border-line bg-surface p-1.5 shadow-pop">
+    <header className="relative z-30 border-b border-line bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/70">
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 sm:px-6">
+        <div className="min-[420px]:hidden">
+          <LogoMark />
+        </div>
+        <div className="hidden min-w-0 min-[420px]:block md:w-56">
+          <Logo />
+        </div>
+        <div className="mx-auto">
+          <ViewSwitch view={p.view} onView={p.onView} />
+        </div>
+        <div className="flex items-center justify-end gap-1 md:w-56">
+          {conversation && (
+            <button type="button" onClick={p.onSummarize} disabled={!p.hasContent} className="btn hidden h-9 px-3 lg:inline-flex" title="Summarize the conversation">
+              <SparklesIcon className="h-4 w-4 text-accent" />
+              Summarize
+            </button>
+          )}
           <button
-            role="menuitemcheckbox"
-            aria-checked={tone === "formal"}
             type="button"
-            className="menu-item sm:hidden"
-            onClick={() => onTone(tone === "formal" ? "casual" : "formal")}
+            onClick={p.onToggleTheme}
+            className="icon-btn max-sm:hidden"
+            aria-label={p.theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            title={p.theme === "dark" ? "Light theme" : "Dark theme"}
           >
-            <ChatBubbleBottomCenterTextIcon className="h-4 w-4 text-subtle" />
-            <span className="flex-1">Formal tone</span>
-            <span className={`relative h-5 w-9 rounded-full transition-colors ${tone === "formal" ? "bg-accent" : "bg-line"}`}>
-              <span
-                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${tone === "formal" ? "translate-x-[18px]" : "translate-x-0.5"}`}
-              />
-            </span>
+            {p.theme === "dark" ? <SunIcon className="h-[18px] w-[18px]" /> : <MoonIcon className="h-[18px] w-[18px]" />}
           </button>
-          <div className="my-1.5 h-px bg-line sm:hidden" />
-          <button role="menuitem" type="button" className="menu-item" disabled={!hasContent} onClick={run(() => onExport("md"))}>
-            <ArrowDownTrayIcon className="h-4 w-4 text-subtle" />
-            <span className="flex-1">Export as Markdown</span>
-          </button>
-          <button role="menuitem" type="button" className="menu-item" disabled={!hasContent} onClick={run(() => onExport("txt"))}>
-            <DocumentTextIcon className="h-4 w-4 text-subtle" />
-            <span className="flex-1">Export as text</span>
-          </button>
-          <button role="menuitem" type="button" className="menu-item" disabled={!hasContent} onClick={run(onClear)}>
-            <TrashIcon className="h-4 w-4 text-subtle" />
-            <span className="flex-1">Clear conversation</span>
-          </button>
-          <div className="my-1.5 h-px bg-line" />
-          <button role="menuitem" type="button" className="menu-item max-sm:hidden" onClick={run(onShortcuts)}>
-            <CommandLineIcon className="h-4 w-4 text-subtle" />
-            <span className="flex-1">Keyboard shortcuts</span>
-            <kbd className="font-mono text-[11px] text-subtle">?</kbd>
-          </button>
-          <button role="menuitem" type="button" className="menu-item" onClick={run(onAbout)}>
-            <InformationCircleIcon className="h-4 w-4 text-subtle" />
-            <span className="flex-1">About and privacy</span>
+          <button
+            ref={moreRef}
+            type="button"
+            className="icon-btn"
+            onClick={() => setOpen((o) => !o)}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-label="Menu"
+            title="Menu"
+          >
+            <EllipsisHorizontalIcon className="h-5 w-5" />
           </button>
         </div>
-      )}
-    </div>
-  );
-};
+      </div>
 
-const Header: React.FC<Props> = ({ theme, onToggleTheme, onSummarize, ...menu }) => (
-  <header className="relative z-30 border-b border-line bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/70">
-    <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 sm:px-6">
-      <Logo />
-      <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
-        <button type="button" onClick={onSummarize} disabled={!menu.hasContent} className="btn h-9 px-2.5 sm:px-3" title="Summarize the conversation">
-          <SparklesIcon className="h-4 w-4 text-accent" />
-          <span className="hidden sm:inline">Summarize</span>
+      <Popover anchor={moreRef.current} open={open} onClose={() => setOpen(false)} width={264}>
+        {conversation && (
+          <button role="menuitem" type="button" className="menu-item lg:hidden" disabled={!p.hasContent} onClick={run(p.onSummarize)}>
+            <SparklesIcon className="h-4 w-4 text-accent" />
+            <span className="flex-1">Summarize</span>
+          </button>
+        )}
+        <button role="menuitemcheckbox" aria-checked={p.showRoman} type="button" className="menu-item" onClick={() => p.onShowRoman(!p.showRoman)}>
+          <LanguageIcon className="h-4 w-4 text-subtle" />
+          <span className="flex-1">Show pronunciation</span>
+          <Toggle on={p.showRoman} />
         </button>
         <button
+          role="menuitemcheckbox"
+          aria-checked={p.tone === "formal"}
           type="button"
-          onClick={onToggleTheme}
-          className="icon-btn"
-          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-          title={theme === "dark" ? "Light theme" : "Dark theme"}
+          className="menu-item sm:hidden"
+          onClick={() => p.onTone(p.tone === "formal" ? "casual" : "formal")}
         >
-          {theme === "dark" ? <SunIcon className="h-[18px] w-[18px]" /> : <MoonIcon className="h-[18px] w-[18px]" />}
+          <ChatBubbleBottomCenterTextIcon className="h-4 w-4 text-subtle" />
+          <span className="flex-1">Formal tone</span>
+          <Toggle on={p.tone === "formal"} />
         </button>
-        <MoreMenu {...menu} />
-      </div>
-    </div>
-  </header>
-);
+        <button role="menuitemcheckbox" aria-checked={p.theme === "dark"} type="button" className="menu-item sm:hidden" onClick={p.onToggleTheme}>
+          <MoonIcon className="h-4 w-4 text-subtle" />
+          <span className="flex-1">Dark theme</span>
+          <Toggle on={p.theme === "dark"} />
+        </button>
+        <div className="my-1.5 h-px bg-line" />
+        <button role="menuitem" type="button" className="menu-item" onClick={run(p.onSaved)}>
+          <StarIcon className="h-4 w-4 text-subtle" />
+          <span className="flex-1">Saved phrases</span>
+          {p.savedCount > 0 && <span className="text-xs tabular-nums text-subtle">{p.savedCount}</span>}
+        </button>
+        {conversation && (
+          <button role="menuitem" type="button" className="menu-item" onClick={run(p.onFaceToFace)}>
+            <FaceToFaceIcon className="h-4 w-4 text-subtle" />
+            <span className="flex-1">Face to face</span>
+          </button>
+        )}
+        <button role="menuitem" type="button" className="menu-item" onClick={run(p.onHistory)}>
+          <ClockIcon className="h-4 w-4 text-subtle" />
+          <span className="flex-1">History</span>
+        </button>
+        {conversation && (
+          <>
+            <button role="menuitem" type="button" className="menu-item" disabled={!p.hasContent} onClick={run(p.onNew)}>
+              <PencilSquareIcon className="h-4 w-4 text-subtle" />
+              <span className="flex-1">New conversation</span>
+            </button>
+            <button role="menuitem" type="button" className="menu-item" disabled={!p.hasContent} onClick={run(() => p.onExport("md"))}>
+              <ArrowDownTrayIcon className="h-4 w-4 text-subtle" />
+              <span className="flex-1">Export as Markdown</span>
+            </button>
+            <button role="menuitem" type="button" className="menu-item" disabled={!p.hasContent} onClick={run(() => p.onExport("txt"))}>
+              <DocumentTextIcon className="h-4 w-4 text-subtle" />
+              <span className="flex-1">Export as text</span>
+            </button>
+          </>
+        )}
+        <div className="my-1.5 h-px bg-line" />
+        <button role="menuitem" type="button" className="menu-item max-sm:hidden" onClick={run(p.onShortcuts)}>
+          <CommandLineIcon className="h-4 w-4 text-subtle" />
+          <span className="flex-1">Keyboard shortcuts</span>
+          <kbd className="font-mono text-[11px] text-subtle">?</kbd>
+        </button>
+        <button role="menuitem" type="button" className="menu-item" onClick={run(p.onAbout)}>
+          <InformationCircleIcon className="h-4 w-4 text-subtle" />
+          <span className="flex-1">About and privacy</span>
+        </button>
+      </Popover>
+    </header>
+  );
+};
 
 export default Header;

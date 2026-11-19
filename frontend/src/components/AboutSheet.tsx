@@ -25,15 +25,16 @@ const AboutSheet: React.FC<{ open: boolean; onClose: () => void }> = ({ open, on
     <div className="space-y-5">
       <Row icon={<ChatBubbleLeftRightIcon className="h-4 w-4" />} title="Made for conversations">
         Speak or type. Each finished sentence is translated with the lines before it in mind, so names, pronouns and tone
-        carry through. Swap languages to let the other person reply.
+        carry through. Swap languages to let the other person reply, or use Face to face to put the phone between you.
       </Row>
-      <Row icon={<SparklesIcon className="h-4 w-4" />} title="Summaries and export">
-        Get a short summary with action items in both languages, or download the transcript as Markdown or text.
+      <Row icon={<SparklesIcon className="h-4 w-4" />} title="More than a translation">
+        Tap a translation for other ways to say it, show pronunciation in Latin letters, star phrases to keep them, and get
+        a short summary with action items in both languages.
       </Row>
       <Row icon={<LockClosedIcon className="h-4 w-4" />} title="Private by default">
-        Audio is streamed only to transcribe it and is never stored. Your conversation stays in this browser tab; it isn't
-        saved to an account and disappears when you clear it or close the tab. Speech and text are processed by our speech
-        and translation providers to produce results.
+        Audio is streamed only to transcribe it and is never stored. History and saved phrases are kept only in this
+        browser, never on a server or in an account; turn history off or delete it anytime from History. Speech and text are
+        sent to our speech and translation providers to produce results.
       </Row>
     </div>
     <p className="mt-6 border-t border-line pt-4 text-xs text-subtle">

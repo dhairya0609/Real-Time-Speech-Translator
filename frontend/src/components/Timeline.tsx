@@ -15,11 +15,19 @@ type Props = {
   micState: MicState;
   sourceLang: string;
   speaker: "a" | "b";
+  showRoman: boolean;
+  aiOn: boolean;
+  isSaved: (original: string, translated: string) => boolean;
   onRetry: (u: Utterance) => void;
   onSample: (text: string) => void;
+  onToggleSave: (u: Utterance) => void;
+  onAlternatives: (u: Utterance) => void;
+  onShow: (u: Utterance) => void;
 };
 
-const Timeline: React.FC<Props> = ({ utterances, interim, micState, sourceLang, speaker, onRetry, onSample }) => {
+const Timeline: React.FC<Props> = ({
+  utterances, interim, micState, sourceLang, speaker, showRoman, aiOn, isSaved, onRetry, onSample, onToggleSave, onAlternatives, onShow,
+}) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
   const showInterim = micState === "listening" || (micState === "connecting" && Boolean(interim));
@@ -65,7 +73,17 @@ const Timeline: React.FC<Props> = ({ utterances, interim, micState, sourceLang, 
         ) : (
           <>
             {utterances.map((u) => (
-              <UtteranceCard key={u.id} u={u} onRetry={onRetry} />
+              <UtteranceCard
+                key={u.id}
+                u={u}
+                showRoman={showRoman}
+                aiOn={aiOn}
+                saved={Boolean(u.translated) && isSaved(u.original, u.translated!)}
+                onRetry={onRetry}
+                onToggleSave={onToggleSave}
+                onAlternatives={onAlternatives}
+                onShow={onShow}
+              />
             ))}
             {showInterim && <InterimCard text={interim} sourceLang={sourceLang} other={speaker === "b"} />}
           </>
