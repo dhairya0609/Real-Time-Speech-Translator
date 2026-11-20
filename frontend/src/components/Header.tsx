@@ -48,7 +48,7 @@ const Toggle: React.FC<{ on: boolean }> = ({ on }) => (
   </span>
 );
 
-export const ViewSwitch: React.FC<{ view: View; onView: (v: View) => void }> = ({ view, onView }) => (
+const ViewSwitch: React.FC<{ view: View; onView: (v: View) => void }> = ({ view, onView }) => (
   <div role="tablist" aria-label="Mode" className="flex h-9 items-center rounded-full border border-line bg-surface p-0.5 shadow-card">
     {(
       [

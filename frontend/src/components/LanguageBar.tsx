@@ -16,7 +16,7 @@ type Props = {
   onTone: (tone: Tone) => void;
 };
 
-export const ToneToggle: React.FC<{ value: Tone; onChange: (t: Tone) => void; compact?: boolean }> = ({ value, onChange, compact }) => (
+const ToneToggle: React.FC<{ value: Tone; onChange: (t: Tone) => void; compact?: boolean }> = ({ value, onChange, compact }) => (
   <div
     role="radiogroup"
     aria-label="Translation tone"

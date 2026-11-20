@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { WS_URL } from "../config";
 import type { Engine, MicState, Notice, Tone } from "../types";
 
-export type MicError = { code: string; message: string };
+type MicError = { code: string; message: string };
 
 export type LiveTranslation = {
   id: string;
@@ -30,7 +30,7 @@ function pickMimeType() {
   return MIME_TYPES.find((t) => MediaRecorder.isTypeSupported(t));
 }
 
-export function micErrorFrom(err: unknown): MicError {
+function micErrorFrom(err: unknown): MicError {
   const name = (err as DOMException)?.name;
   switch (name) {
     case "NotAllowedError":

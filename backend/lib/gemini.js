@@ -16,7 +16,7 @@ export function geminiConfigured() {
   return Boolean(stubClient || config.geminiKey);
 }
 
-export class GeminiError extends Error {
+class GeminiError extends Error {
   constructor(kind, message, { status, retryAfterMs = 0 } = {}) {
     super(message);
     this.kind = kind;

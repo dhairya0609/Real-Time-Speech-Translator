@@ -1,7 +1,7 @@
 import React from "react";
 import { hasDevanagari, romanizeDevanagari } from "../lib/romanize";
 
-export function romanFor(text: string | undefined, server?: string) {
+function romanFor(text: string | undefined, server?: string) {
   if (!text) return undefined;
   if (server) return server;
   return hasDevanagari(text) ? romanizeDevanagari(text) : undefined;

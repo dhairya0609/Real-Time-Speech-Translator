@@ -16,7 +16,6 @@ function str(name, fallback = "") {
 
 const config = {
   port: int("PORT", 5000),
-  production: process.env.NODE_ENV === "production" || Boolean(process.env.RENDER),
   // Render terminates TLS and appends the client address to X-Forwarded-For.
   trustProxy: str("TRUST_PROXY", process.env.RENDER ? "1" : "0") === "1",
   allowedOrigins: str("ALLOWED_ORIGINS")

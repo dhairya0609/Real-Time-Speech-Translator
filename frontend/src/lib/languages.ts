@@ -1,6 +1,6 @@
 export const AUTO = "auto";
 
-export type Language = { code: string; name: string };
+type Language = { code: string; name: string };
 
 export const LANGUAGES: Language[] = [
   { code: "en", name: "English" },
@@ -112,9 +112,6 @@ export function shortCode(code?: string) {
   return code.split("-")[0].toUpperCase();
 }
 
-export function sameLanguage(a?: string, b?: string) {
-  return Boolean(a && b) && a!.split("-")[0].toLowerCase() === b!.split("-")[0].toLowerCase();
-}
 
 export function bcp47(code: string) {
   return code === "zh" ? "zh-CN" : code === "jw" ? "jv" : code;

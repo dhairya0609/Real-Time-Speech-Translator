@@ -1,6 +1,6 @@
 import config from "./config.js";
 
-export class FixedWindowLimiter {
+class FixedWindowLimiter {
   constructor({ limit, windowMs }) {
     this.limit = limit;
     this.windowMs = windowMs;
@@ -39,7 +39,7 @@ function msUntilUtcMidnight(now) {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - now;
 }
 
-export class DailyCap {
+class DailyCap {
   constructor(limit) {
     this.limit = limit;
     this.count = 0;

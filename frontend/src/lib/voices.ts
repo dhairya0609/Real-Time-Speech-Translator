@@ -16,7 +16,7 @@ if (synth) {
   synth.addEventListener?.("voiceschanged", refresh);
 }
 
-export function onVoicesChanged(fn: () => void) {
+function onVoicesChanged(fn: () => void) {
   listeners.add(fn);
   return () => {
     listeners.delete(fn);
@@ -37,7 +37,7 @@ function score(v: SpeechSynthesisVoice, lang: string) {
   return s;
 }
 
-export function pickVoice(code: string): SpeechSynthesisVoice | null {
+function pickVoice(code: string): SpeechSynthesisVoice | null {
   const lang = bcp47(code);
   const base = lang.split("-")[0].toLowerCase();
   const matches = voices.filter((v) => v.lang.toLowerCase().replace("_", "-").split("-")[0] === base);
@@ -62,10 +62,6 @@ export function speak(text: string, code: string, onEnd?: () => void) {
     u.onerror = onEnd;
   }
   synth.speak(u);
-}
-
-export function stopSpeaking() {
-  synth?.cancel();
 }
 
 /** Re-renders when the browser finishes loading its voice list. */
