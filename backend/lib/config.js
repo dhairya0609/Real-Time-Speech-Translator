@@ -33,14 +33,16 @@ const config = {
   maxSocketsPerIp: int("MAX_SOCKETS_PER_IP", 3),
 
   geminiKey: str("GEMINI_API_KEY"),
-  geminiModel: str("GEMINI_MODEL", "gemini-3.8-flash"),
+  // Flash-Lite first: it's the fastest, which live speech needs, and on the free tier it has been the
+  // only model reliably answering while the larger Flash models return "high demand".
+  geminiModel: str("GEMINI_MODEL", "gemini-3.5-flash-lite"),
   // Tried in order when a model is overloaded, rate-limited or missing on this key.
-  geminiFallbackModels: str("GEMINI_FALLBACK_MODELS", "gemini-3.6-flash,gemini-3.5-flash-lite")
+  geminiFallbackModels: str("GEMINI_FALLBACK_MODELS", "gemini-3.6-flash,gemini-3.8-flash")
     .split(",")
     .map((m) => m.trim())
     .filter(Boolean),
   geminiThinkingLevel: str("GEMINI_THINKING_LEVEL", "LOW").toUpperCase(),
-  translateTimeoutMs: int("GEMINI_TIMEOUT_MS", 5000),
+  translateTimeoutMs: int("GEMINI_TIMEOUT_MS", 7000),
   summaryTimeoutMs: int("GEMINI_SUMMARY_TIMEOUT_MS", 20000),
   alternativesTimeoutMs: int("GEMINI_ALTERNATIVES_TIMEOUT_MS", 9000),
   contextTurns: int("TRANSLATION_CONTEXT_TURNS", 3),

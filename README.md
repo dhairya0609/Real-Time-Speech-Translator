@@ -2,7 +2,7 @@
 
 Speak or type in one language and read a live, context-aware translation in another. Audio streams to a Node.js backend, Deepgram transcribes it in real time, and each finished utterance is translated by Google Gemini using the previous few turns as context, so pronouns, tone and idioms carry over. Classic machine translation takes over automatically whenever the AI is unavailable.
 
-**Live demo:** [trilogy-r2-1.onrender.com](https://trilogy-r2-1.onrender.com/)
+**Live demo:** [live-translator-app.onrender.com](https://live-translator-app.onrender.com/)
 
 ## Features
 
@@ -35,10 +35,10 @@ Summaries need Gemini; without it the panel says so and export still works.
 | --- | --- | --- |
 | `DEEPGRAM_API_KEY` | none | Live speech. Without it the mic is disabled and the app is type-only. |
 | `GEMINI_API_KEY` | none | Gemini translation and summaries ([get a free key](https://aistudio.google.com/apikey)). Without it, classic translation is used. |
-| `GEMINI_MODEL` | `gemini-3.8-flash` | Any Gemini model id. |
-| `GEMINI_FALLBACK_MODELS` | `gemini-3.6-flash,gemini-3.5-flash-lite` | Tried in order when the main model is overloaded, rate-limited or unavailable. |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | Any Gemini model id. |
+| `GEMINI_FALLBACK_MODELS` | `gemini-3.6-flash,gemini-3.8-flash` | Tried in order when the main model is overloaded, rate-limited or unavailable. |
 | `GEMINI_THINKING_LEVEL` | `LOW` | `LOW`, `MEDIUM`, `HIGH`, or `OFF` to send no thinking config. |
-| `GEMINI_TIMEOUT_MS` | `5000` | Deadline per translation before falling back. |
+| `GEMINI_TIMEOUT_MS` | `7000` | Deadline per translation before falling back. |
 | `GEMINI_SUMMARY_TIMEOUT_MS` | `20000` | Deadline per summary. |
 | `GEMINI_ALTERNATIVES_TIMEOUT_MS` | `9000` | Deadline per alternatives request. |
 | `TRANSLATION_CONTEXT_TURNS` | `3` | Earlier turns sent as context. |
